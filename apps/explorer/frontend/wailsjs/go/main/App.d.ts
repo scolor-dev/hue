@@ -6,6 +6,8 @@ export function AddFavorite(arg1:string):Promise<void>;
 
 export function CopyItem(arg1:string,arg2:string):Promise<void>;
 
+export function CreateFile(arg1:string,arg2:string):Promise<void>;
+
 export function CreateFolder(arg1:string,arg2:string):Promise<void>;
 
 export function DeleteItem(arg1:string):Promise<void>;

@@ -359,6 +359,14 @@ func (a *App) CreateFolder(parentPath, name string) error {
 	return os.MkdirAll(filepath.Join(parentPath, name), 0755)
 }
 
+func (a *App) CreateFile(parentPath, name string) error {
+	f, err := os.OpenFile(filepath.Join(parentPath, name), os.O_CREATE|os.O_EXCL, 0644)
+	if err != nil {
+		return err
+	}
+	return f.Close()
+}
+
 func (a *App) CopyItem(src, dstDir string) error {
 	name := filepath.Base(src)
 	dst := filepath.Join(dstDir, name)

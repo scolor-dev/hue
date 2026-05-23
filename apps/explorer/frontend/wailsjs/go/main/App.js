@@ -10,6 +10,10 @@ export function CopyItem(arg1, arg2) {
   return window['go']['main']['App']['CopyItem'](arg1, arg2);
 }
 
+export function CreateFile(arg1, arg2) {
+  return window['go']['main']['App']['CreateFile'](arg1, arg2);
+}
+
 export function CreateFolder(arg1, arg2) {
   return window['go']['main']['App']['CreateFolder'](arg1, arg2);
 }

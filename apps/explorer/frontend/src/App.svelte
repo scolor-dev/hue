@@ -1,7 +1,7 @@
 <script>
   import { onMount, tick } from 'svelte'
   import { ListDirectory, GetHomeDir, GetDrives, GetParentDir, OpenFile,
-           DeleteItem, RenameItem, CreateFolder, CopyItem, MoveItem,
+           DeleteItem, RenameItem, CreateFolder, CreateFile, CopyItem, MoveItem,
            GetThumbnail, GetPreview, OpenSettings, GetSettings,
            AddFavorite, RemoveFavorite,
            GetStartupPath, OpenInNewWindow, ExecInConsole, SearchFiles } from '../wailsjs/go/main/App'
@@ -27,9 +27,11 @@
   let renamingPath = ''
   let renameValue = ''
 
-  // 新規フォルダ
+  // 新規フォルダ・ファイル
   let creatingFolder = false
   let newFolderName = ''
+  let creatingFile = false
+  let newFileName = ''
 
   // クリップボード
   let clipboard = null // { path, op: 'copy' | 'cut' }
@@ -55,13 +57,14 @@
       colName: '名前', colSize: 'サイズ', colDate: '更新日時',
       openFolder: 'フォルダを開く', open: '開く', openNewWindow: '新しいウィンドウで開く', openConsole: 'コンソールで開く',
       copy: 'コピー', cut: '切り取り', paste: '貼り付け',
-      newFolder: '新規フォルダー', rename: '名前の変更', delete: '削除',
+      newFolder: '新規フォルダー', newFile: '新規ファイル', rename: '名前の変更', delete: '削除',
       countItems: (n) => `${n} 件`,
       selectedLabel: (name) => `${name} を選択中`,
       selectedMultiLabel: (n) => `${n} 件選択中`,
       clipboardLabel: (op, n) => `クリップボード: ${op === 'copy' ? 'コピー' : '切り取り'}${n > 1 ? ` (${n} 件)` : ''}`,
       confirmDelete: (name) => `「${name}」を削除しますか？`,
       defaultFolderName: '新しいフォルダー',
+      defaultFileName: '新しいファイル.txt',
       truncated: '省略',
       relNow: 'たった今',
       relMin: (n) => `${n}分前`, relHr: (n) => `${n}時間前`,
@@ -81,13 +84,14 @@
       colName: 'Name', colSize: 'Size', colDate: 'Modified',
       openFolder: 'Open Folder', open: 'Open', openNewWindow: 'Open in New Window', openConsole: 'Open in Console',
       copy: 'Copy', cut: 'Cut', paste: 'Paste',
-      newFolder: 'New Folder', rename: 'Rename', delete: 'Delete',
+      newFolder: 'New Folder', newFile: 'New File', rename: 'Rename', delete: 'Delete',
       countItems: (n) => `${n} item${n !== 1 ? 's' : ''}`,
       selectedLabel: (name) => `${name} selected`,
       selectedMultiLabel: (n) => `${n} items selected`,
       clipboardLabel: (op, n) => `Clipboard: ${op === 'copy' ? 'Copy' : 'Cut'}${n > 1 ? ` (${n})` : ''}`,
       confirmDelete: (name) => `Delete "${name}"?`,
       defaultFolderName: 'New Folder',
+      defaultFileName: 'New File.txt',
       truncated: 'truncated',
       relNow: 'just now',
       relMin: (n) => `${n}m ago`, relHr: (n) => `${n}h ago`,
@@ -418,7 +422,7 @@
       if (e.key === 'Escape') clearSearch()
       return
     }
-    if (renamingPath || creatingFolder) return
+    if (renamingPath || creatingFolder || creatingFile) return
 
     if (e.ctrlKey && e.key === 'f') {
       e.preventDefault()
@@ -469,6 +473,7 @@
     } else if (e.key === 'Escape') {
       renamingPath = ''
       creatingFolder = false
+      creatingFile = false
     }
   }
 
@@ -523,6 +528,28 @@
       creatingFolder = false
       await refresh()
     } catch (e) { error = String(e); creatingFolder = false }
+  }
+
+  // ── 新規ファイル ──
+  function startCreateFile() {
+    creatingFile = true
+    newFileName = t.defaultFileName
+    setTimeout(() => {
+      const el = document.getElementById('new-file-input')
+      if (!el) return
+      el.focus()
+      const dot = newFileName.lastIndexOf('.')
+      el.setSelectionRange(0, dot > 0 ? dot : newFileName.length)
+    }, 0)
+  }
+
+  async function commitCreateFile() {
+    if (!newFileName.trim()) { creatingFile = false; return }
+    try {
+      await CreateFile(currentPath, newFileName.trim())
+      creatingFile = false
+      await refresh()
+    } catch (e) { error = String(e); creatingFile = false }
   }
 
   // ── コピー・貼り付け ──
@@ -771,6 +798,24 @@
           </span>
         </div>
       {/if}
+      {#if creatingFile}
+        <div class="file-row">
+          <span class="col-icon">📄</span>
+          <span class="col-name">
+            <input
+              id="new-file-input"
+              class="rename-input"
+              bind:value={newFileName}
+              on:keydown={(e) => {
+                if (e.key === 'Enter') commitCreateFile()
+                if (e.key === 'Escape') creatingFile = false
+                e.stopPropagation()
+              }}
+              on:blur={commitCreateFile}
+            />
+          </span>
+        </div>
+      {/if}
       {/if}
     </div>
   </div>
@@ -871,6 +916,9 @@
       <button on:click={() => { startCreateFolder(); closeContextMenu() }}>
         {t.newFolder} <span class="shortcut">Ctrl+Shift+N</span>
       </button>
+      <button on:click={() => { startCreateFile(); closeContextMenu() }}>
+        {t.newFile}
+      </button>
       <hr />
       {#if contextMenu.paths.length === 1}
         <button on:click={() => { doAddFavorite(contextMenu.target.path); closeContextMenu() }}>
@@ -893,6 +941,9 @@
       {/if}
       <button on:click={() => { startCreateFolder(); closeContextMenu() }}>
         {t.newFolder} <span class="shortcut">Ctrl+Shift+N</span>
+      </button>
+      <button on:click={() => { startCreateFile(); closeContextMenu() }}>
+        {t.newFile}
       </button>
       <hr />
       <button on:click={() => {

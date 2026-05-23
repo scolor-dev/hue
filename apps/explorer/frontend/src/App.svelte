@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import { ListDirectory, GetHomeDir, GetDrives, GetParentDir, OpenFile,
            DeleteItem, RenameItem, CreateFolder, CopyItem, MoveItem } from '../wailsjs/go/main/App'
+  import { EventsOn } from '../wailsjs/runtime/runtime'
 
   let currentPath = ''
   let entries = []
@@ -30,6 +31,7 @@
     const home = await GetHomeDir()
     await navigate(home)
     window.addEventListener('click', closeContextMenu)
+    EventsOn('fs:changed', () => refresh())
   })
 
   async function navigate(path) {

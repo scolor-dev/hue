@@ -15,4 +15,16 @@ pub fn build(b: *std.Build) void {
     });
 
     b.installArtifact(fs_lib);
+
+    const watcher_lib = b.addLibrary(.{
+        .name = "hue_watcher",
+        .linkage = .dynamic,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("core/watcher/src/watcher.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+
+    b.installArtifact(watcher_lib);
 }

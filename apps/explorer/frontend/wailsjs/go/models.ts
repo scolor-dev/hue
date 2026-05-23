@@ -28,6 +28,26 @@ export namespace main {
 	        this.promptPlaceholder = source["promptPlaceholder"];
 	    }
 	}
+	export class DriveInfo {
+	    path: string;
+	    label: string;
+	    driveType: string;
+	    freeBytes: number;
+	    totalBytes: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new DriveInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.label = source["label"];
+	        this.driveType = source["driveType"];
+	        this.freeBytes = source["freeBytes"];
+	        this.totalBytes = source["totalBytes"];
+	    }
+	}
 	export class FileEntry {
 	    name: string;
 	    path: string;

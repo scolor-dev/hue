@@ -12,8 +12,9 @@ import (
 )
 
 type zigFSLib struct {
-	dll     *syscall.DLL
-	listDir *syscall.Proc
+	dll       *syscall.DLL
+	listDir   *syscall.Proc
+	getDrives *syscall.Proc
 }
 
 var zigFS *zigFSLib
@@ -31,14 +32,44 @@ func initZigFS() {
 		if err != nil {
 			continue
 		}
-		proc, err := dll.FindProc("hue_list_dir")
+		listDir, err := dll.FindProc("hue_list_dir")
 		if err != nil {
 			dll.Release()
 			continue
 		}
-		zigFS = &zigFSLib{dll: dll, listDir: proc}
+		getDrives, _ := dll.FindProc("hue_get_drives")
+		zigFS = &zigFSLib{dll: dll, listDir: listDir, getDrives: getDrives}
 		return
 	}
+}
+
+// DriveInfo はドライブの容量情報を保持する
+type DriveInfo struct {
+	Path      string `json:"path"`
+	Label     string `json:"label"`
+	DriveType string `json:"driveType"`
+	FreeBytes uint64 `json:"freeBytes"`
+	TotalBytes uint64 `json:"totalBytes"`
+}
+
+func (z *zigFSLib) listDrives() ([]DriveInfo, error) {
+	if z.getDrives == nil {
+		return nil, fmt.Errorf("hue_get_drives not available")
+	}
+	buf := make([]byte, 64*1024)
+	r, _, _ := z.getDrives.Call(
+		uintptr(unsafe.Pointer(&buf[0])),
+		uintptr(len(buf)),
+	)
+	n := int32(r)
+	if n < 0 {
+		return nil, fmt.Errorf("hue_get_drives error: %d", n)
+	}
+	var drives []DriveInfo
+	if err := json.Unmarshal(buf[:n], &drives); err != nil {
+		return nil, err
+	}
+	return drives, nil
 }
 
 type zigEntry struct {

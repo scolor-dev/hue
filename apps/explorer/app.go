@@ -256,12 +256,18 @@ func (a *App) GetHomeDir() string {
 	return home
 }
 
-func (a *App) GetDrives() []string {
-	var drives []string
+func (a *App) GetDrives() []DriveInfo {
+	if zigFS != nil {
+		if drives, err := zigFS.listDrives(); err == nil {
+			return drives
+		}
+	}
+	// フォールバック: パスのみ返す
+	var drives []DriveInfo
 	for _, letter := range "ABCDEFGHIJKLMNOPQRSTUVWXYZ" {
 		path := string(letter) + ":\\"
 		if _, err := os.Stat(path); err == nil {
-			drives = append(drives, path)
+			drives = append(drives, DriveInfo{Path: path})
 		}
 	}
 	return drives

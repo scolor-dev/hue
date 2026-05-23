@@ -15,6 +15,12 @@
   export let shortcuts = []
   export let shortcutsLabel = 'ショートカット'
 
+  function fmtGB(bytes) {
+    if (bytes >= 1e9) return (bytes / 1e9).toFixed(1) + ' GB'
+    if (bytes >= 1e6) return (bytes / 1e6).toFixed(0) + ' MB'
+    return (bytes / 1e3).toFixed(0) + ' KB'
+  }
+
   let sidebarWidth = 200
   let isResizing = false
 
@@ -62,14 +68,29 @@
     />
 
     <div class="sidebar-title" role="tree" aria-label={label}>{label}</div>
-    {#each drives as drive}
-      <TreeNode
-        path={drive}
-        name={drive}
-        {currentPath}
-        depth={0}
-        {onNavigate}
-      />
+    {#each drives as d}
+      <div class="drive-entry">
+        <TreeNode
+          path={d.path}
+          name={d.label ? `${d.path[0]}: ${d.label}` : d.path}
+          {currentPath}
+          depth={0}
+          {onNavigate}
+        />
+        {#if d.totalBytes > 0}
+          {@const usedRatio = 1 - d.freeBytes / d.totalBytes}
+          <div class="drive-bar-wrap" title="{fmtGB(d.freeBytes)} 空き / {fmtGB(d.totalBytes)}">
+            <div class="drive-bar">
+              <div
+                class="drive-bar-used"
+                class:warn={usedRatio > 0.85}
+                style="width:{Math.round(usedRatio * 100)}%"
+              ></div>
+            </div>
+            <span class="drive-space">{fmtGB(d.freeBytes)} 空き</span>
+          </div>
+        {/if}
+      </div>
     {/each}
   </div>
 
@@ -125,6 +146,38 @@
 
   .sidebar-resizer:hover,
   .sidebar-resizer.active { background: #007acc; }
+
+  .drive-entry { display: flex; flex-direction: column; }
+
+  .drive-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 1px 10px 4px 24px;
+  }
+
+  .drive-bar {
+    flex: 1;
+    height: 3px;
+    background: #3c3c3c;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .drive-bar-used {
+    height: 100%;
+    background: #007acc;
+    border-radius: 2px;
+    transition: width 0.3s;
+  }
+  .drive-bar-used.warn { background: #e8a838; }
+
+  .drive-space {
+    font-size: 10px;
+    color: #666;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
 
   .tree-sidebar::-webkit-scrollbar { width: 6px; }
   .tree-sidebar::-webkit-scrollbar-track { background: transparent; }

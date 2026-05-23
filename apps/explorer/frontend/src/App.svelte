@@ -15,7 +15,7 @@
   let historyIndex = -1
   let selectedPath = ''
   let error = ''
-  let drives = []
+  let drives = [] // DriveInfo[]
 
   // 右クリックメニュー
   let contextMenu = { visible: false, x: 0, y: 0, target: null }
@@ -445,8 +445,10 @@
     <button on:click={goUp} title={t.up}>&#8593;</button>
     <button on:click={refresh} title={t.refresh}>&#8635;</button>
     <div class="drives">
-      {#each drives as drive}
-        <button class="drive-btn" on:click={() => navigate(drive)}>{drive}</button>
+      {#each drives as d}
+        <button class="drive-btn" on:click={() => navigate(d.path)} title={d.label || d.path}>
+          {d.path[0]}:
+        </button>
       {/each}
     </div>
     <input

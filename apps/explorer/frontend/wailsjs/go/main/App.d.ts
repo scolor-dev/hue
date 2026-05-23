@@ -12,7 +12,7 @@ export function DeleteItem(arg1:string):Promise<void>;
 
 export function ExecInConsole(arg1:string,arg2:string):Promise<void>;
 
-export function GetDrives():Promise<Array<string>>;
+export function GetDrives():Promise<Array<main.DriveInfo>>;
 
 export function GetHomeDir():Promise<string>;
 

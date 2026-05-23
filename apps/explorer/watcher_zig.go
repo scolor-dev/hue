@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"os"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -21,6 +22,8 @@ type zigWatcherLib struct {
 
 var zigWatcher *zigWatcherLib
 var watchCancel context.CancelFunc
+var watchCurrentPath string
+var watchMu sync.Mutex
 
 func initZigWatcher() {
 	candidates := []string{
@@ -56,15 +59,28 @@ func (a *App) startWatching(path string) {
 	if zigWatcher == nil {
 		return
 	}
+	watchMu.Lock()
+	defer watchMu.Unlock()
+
+	// 同じパスを監視中なら再起動不要
+	if path == watchCurrentPath {
+		return
+	}
+
+	// 旧 goroutine をキャンセル（Zig 側は SetEvent で即時停止するので watchStart 内部の watchStop も速い）
 	if watchCancel != nil {
 		watchCancel()
 		watchCancel = nil
 	}
+	watchCurrentPath = path
+
 	pathBytes := append([]byte(path), 0)
 	r, _, _ := zigWatcher.watchStart.Call(uintptr(unsafe.Pointer(&pathBytes[0])))
 	if int32(r) != 0 {
+		watchCurrentPath = ""
 		return
 	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	watchCancel = cancel
 	go func() {

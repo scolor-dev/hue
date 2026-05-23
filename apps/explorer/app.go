@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,6 +13,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 type App struct {
@@ -22,17 +27,102 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	wailsCtx = ctx
 	initZigFS()
 	initZigWatcher()
 	initZigThumb()
 	initZigPreview()
-	startSettingsServer()
+	a.subscribeSettingsEvents()
+}
+
+// ── デーモン管理 ──
+
+func isDevBinary() bool {
+	exe, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(filepath.Base(exe)), "-dev")
+}
+
+func isDaemonRunning() bool {
+	conn, err := net.DialTimeout("tcp", "127.0.0.1:9271", 500*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
+}
+
+func ensureDaemon() {
+	if isDevBinary() {
+		// dev モード: バイナリを共有しないようプロセス内でサーバーを起動
+		if !isDaemonRunning() {
+			startSettingsServer()
+		}
+		return
+	}
+	if isDaemonRunning() {
+		return
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	cmd := exec.Command(exe, "--daemon")
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		CreationFlags: 0x08000000 | 0x01000000, // CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB
+	}
+	if err := cmd.Start(); err != nil {
+		return
+	}
+	for i := 0; i < 20; i++ {
+		time.Sleep(100 * time.Millisecond)
+		if isDaemonRunning() {
+			return
+		}
+	}
+}
+
+// ── SSE サブスクライバー ──
+
+func (a *App) subscribeSettingsEvents() {
+	go func() {
+		for {
+			resp, err := http.Get("http://127.0.0.1:9271/api/settings/events")
+			if err != nil {
+				time.Sleep(2 * time.Second)
+				continue
+			}
+			scanner := bufio.NewScanner(resp.Body)
+			for scanner.Scan() {
+				if strings.HasPrefix(scanner.Text(), "data: changed") {
+					runtime.EventsEmit(a.ctx, "settings:changed")
+				}
+			}
+			resp.Body.Close()
+			time.Sleep(1 * time.Second)
+		}
+	}()
 }
 
 func (a *App) OpenSettings() {
-	// dev: requires `npm run dev` in apps/settings/frontend/
 	exec.Command("cmd", "/c", "start", "http://localhost:5200").Start()
+}
+
+func (a *App) GetStartupPath() string {
+	return startupPath
+}
+
+func (a *App) OpenInNewWindow(path string) {
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	cmd := exec.Command(exe, "--path="+path)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		CreationFlags: 0x01000000, // CREATE_BREAKAWAY_FROM_JOB
+	}
+	cmd.Start()
 }
 
 type FileEntry struct {
@@ -82,7 +172,6 @@ func (a *App) ListDirectory(path string) ([]FileEntry, error) {
 		if entries, err := zigFS.listDirectory(path); err == nil {
 			return entries, nil
 		}
-		// Zig DLL が失敗したら Go 実装にフォールバック
 	}
 	return goListDirectory(path)
 }

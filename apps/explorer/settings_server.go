@@ -1,16 +1,15 @@
 package main
 
 import (
-	"context"
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
-
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 type HueSettings struct {
@@ -44,8 +43,9 @@ func defaultHueSettings() HueSettings {
 var (
 	settingsMu     sync.RWMutex
 	cachedSettings *HueSettings
-	settingsPort   = 9271
-	wailsCtx       context.Context
+
+	sseMu      sync.Mutex
+	sseClients = make(map[chan struct{}]struct{})
 )
 
 func settingsFilePath() string {
@@ -66,6 +66,9 @@ func loadSettings() HueSettings {
 	if data, err := os.ReadFile(settingsFilePath()); err == nil {
 		json.Unmarshal(data, &s)
 	}
+	if s.Favorites == nil {
+		s.Favorites = []string{}
+	}
 
 	settingsMu.Lock()
 	cachedSettings = &s
@@ -74,13 +77,14 @@ func loadSettings() HueSettings {
 }
 
 func persistSettings(s HueSettings) error {
+	if s.Favorites == nil {
+		s.Favorites = []string{}
+	}
 	settingsMu.Lock()
 	cachedSettings = &s
 	settingsMu.Unlock()
 
-	if wailsCtx != nil {
-		runtime.EventsEmit(wailsCtx, "settings:changed")
-	}
+	broadcastSettingsChange()
 
 	p := settingsFilePath()
 	if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
@@ -93,6 +97,17 @@ func persistSettings(s HueSettings) error {
 	return os.WriteFile(p, data, 0644)
 }
 
+func broadcastSettingsChange() {
+	sseMu.Lock()
+	defer sseMu.Unlock()
+	for ch := range sseClients {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
+	}
+}
+
 func startSettingsServer() {
 	ln, err := net.Listen("tcp", "127.0.0.1:9271")
 	if err != nil {
@@ -100,6 +115,7 @@ func startSettingsServer() {
 	}
 
 	mux := http.NewServeMux()
+
 	mux.HandleFunc("/api/settings", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
@@ -122,36 +138,98 @@ func startSettingsServer() {
 		}
 	})
 
+	mux.HandleFunc("/api/settings/events", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		ch := make(chan struct{}, 1)
+		sseMu.Lock()
+		sseClients[ch] = struct{}{}
+		sseMu.Unlock()
+
+		defer func() {
+			sseMu.Lock()
+			delete(sseClients, ch)
+			sseMu.Unlock()
+		}()
+
+		flusher, _ := w.(http.Flusher)
+		fmt.Fprintf(w, "data: connected\n\n")
+		if flusher != nil {
+			flusher.Flush()
+		}
+
+		for {
+			select {
+			case <-ch:
+				fmt.Fprintf(w, "data: changed\n\n")
+				if flusher != nil {
+					flusher.Flush()
+				}
+			case <-r.Context().Done():
+				return
+			}
+		}
+	})
+
 	go http.Serve(ln, mux)
 }
 
+// ── Wails バインドメソッド (HTTP 経由でデーモンに委譲) ──
+
+func fetchSettings() HueSettings {
+	resp, err := http.Get("http://127.0.0.1:9271/api/settings")
+	if err != nil {
+		return defaultHueSettings()
+	}
+	defer resp.Body.Close()
+	var s HueSettings
+	if err := json.NewDecoder(resp.Body).Decode(&s); err != nil {
+		return defaultHueSettings()
+	}
+	if s.Favorites == nil {
+		s.Favorites = []string{}
+	}
+	return s
+}
+
+func postSettings(s HueSettings) {
+	data, _ := json.Marshal(s)
+	http.Post("http://127.0.0.1:9271/api/settings", "application/json", bytes.NewReader(data))
+}
+
 func (a *App) GetSettings() HueSettings {
-	return loadSettings()
+	return fetchSettings()
 }
 
 func (a *App) SaveSettings(s HueSettings) {
-	persistSettings(s)
+	postSettings(s)
 }
 
 func (a *App) AddFavorite(path string) {
-	s := loadSettings()
+	s := fetchSettings()
 	for _, f := range s.Favorites {
 		if strings.EqualFold(f, path) {
 			return
 		}
 	}
 	s.Favorites = append(s.Favorites, path)
-	persistSettings(s)
+	postSettings(s)
 }
 
 func (a *App) RemoveFavorite(path string) {
-	s := loadSettings()
-	kept := s.Favorites[:0]
+	s := fetchSettings()
+	var kept []string
 	for _, f := range s.Favorites {
 		if !strings.EqualFold(f, path) {
 			kept = append(kept, f)
 		}
 	}
+	if kept == nil {
+		kept = []string{}
+	}
 	s.Favorites = kept
-	persistSettings(s)
+	postSettings(s)
 }

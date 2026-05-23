@@ -3,7 +3,8 @@
   import { ListDirectory, GetHomeDir, GetDrives, GetParentDir, OpenFile,
            DeleteItem, RenameItem, CreateFolder, CopyItem, MoveItem,
            GetThumbnail, GetPreview, OpenSettings, GetSettings,
-           AddFavorite, RemoveFavorite } from '../wailsjs/go/main/App'
+           AddFavorite, RemoveFavorite,
+           GetStartupPath, OpenInNewWindow } from '../wailsjs/go/main/App'
   import { EventsOn } from '../wailsjs/runtime/runtime'
   import TreeSidebar from './TreeSidebar.svelte'
 
@@ -43,7 +44,7 @@
       removeFavorite: 'お気に入りから削除',
       back: '戻る', forward: '進む', up: '上へ', refresh: '更新', settingsBtn: '設定',
       colName: '名前', colSize: 'サイズ', colDate: '更新日時',
-      openFolder: 'フォルダを開く', open: '開く',
+      openFolder: 'フォルダを開く', open: '開く', openNewWindow: '新しいウィンドウで開く',
       copy: 'コピー', cut: '切り取り', paste: '貼り付け',
       newFolder: '新規フォルダー', rename: '名前の変更', delete: '削除',
       countItems: (n) => `${n} 件`,
@@ -63,7 +64,7 @@
       removeFavorite: 'Remove from Favorites',
       back: 'Back', forward: 'Forward', up: 'Up', refresh: 'Refresh', settingsBtn: 'Settings',
       colName: 'Name', colSize: 'Size', colDate: 'Modified',
-      openFolder: 'Open Folder', open: 'Open',
+      openFolder: 'Open Folder', open: 'Open', openNewWindow: 'Open in New Window',
       copy: 'Copy', cut: 'Cut', paste: 'Paste',
       newFolder: 'New Folder', rename: 'Rename', delete: 'Delete',
       countItems: (n) => `${n} item${n !== 1 ? 's' : ''}`,
@@ -153,8 +154,9 @@
     const s = await GetSettings()
     await applySettings(s)
     drives = await GetDrives()
-    const home = await GetHomeDir()
-    await navigate(home)
+    const startupPath = await GetStartupPath()
+    const initialPath = startupPath || await GetHomeDir()
+    await navigate(initialPath)
     window.addEventListener('click', closeContextMenu)
     EventsOn('fs:changed', () => refresh())
     EventsOn('settings:changed', async () => {
@@ -535,6 +537,11 @@
       <button on:click={() => { onEnter(contextMenu.target); closeContextMenu() }}>
         {contextMenu.target.isDir ? t.openFolder : t.open}
       </button>
+      {#if contextMenu.target.isDir}
+        <button on:click={() => { OpenInNewWindow(contextMenu.target.path); closeContextMenu() }}>
+          {t.openNewWindow}
+        </button>
+      {/if}
       <hr />
       <button on:click={() => { clipboard = { path: contextMenu.target.path, op: 'copy' }; closeContextMenu() }}>
         {t.copy} <span class="shortcut">Ctrl+C</span>

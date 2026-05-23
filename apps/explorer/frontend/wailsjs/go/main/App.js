@@ -38,6 +38,10 @@ export function GetSettings() {
   return window['go']['main']['App']['GetSettings']();
 }
 
+export function GetStartupPath() {
+  return window['go']['main']['App']['GetStartupPath']();
+}
+
 export function GetThumbnail(arg1) {
   return window['go']['main']['App']['GetThumbnail'](arg1);
 }
@@ -52,6 +56,10 @@ export function MoveItem(arg1, arg2) {
 
 export function OpenFile(arg1) {
   return window['go']['main']['App']['OpenFile'](arg1);
+}
+
+export function OpenInNewWindow(arg1) {
+  return window['go']['main']['App']['OpenInNewWindow'](arg1);
 }
 
 export function OpenSettings() {

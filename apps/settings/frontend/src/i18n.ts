@@ -4,7 +4,7 @@ export const translations = {
   ja: {
     settings: '設定',
     saved: '保存しました',
-    nav: { general: '一般', display: '表示', preview: 'プレビュー', about: 'バージョン情報' },
+    nav: { general: '一般', display: '表示', preview: 'プレビュー', shortcuts: 'ショートカット', about: 'バージョン情報' },
     general: {
       title: '一般',
       language: '言語', languageDesc: 'UIの表示言語',
@@ -25,6 +25,18 @@ export const translations = {
       panelWidth: 'デフォルトパネル幅',
       thumbSize: 'サムネイルサイズ',
     },
+    shortcuts: {
+      title: 'コマンドショートカット',
+      add: '+ 追加', save: '保存', cancel: 'キャンセル', delete: '削除', edit: '編集',
+      labelField: 'ラベル', iconField: 'アイコン (絵文字)',
+      commandField: 'コマンド', commandHint: '複数行可。{input} で追加入力を挿入',
+      executionMode: '実行場所',
+      modeCurrentDir: '現在のフォルダ', modeFixed: '固定パス',
+      fixedPathLabel: 'パス',
+      promptEnabled: '追加入力を使用',
+      promptMessage: '入力メッセージ', promptPlaceholder: 'プレースホルダー',
+      empty: 'ショートカットがありません',
+    },
     about: {
       title: 'バージョン情報',
       appDesc: 'AI-powered Windows ファイルマネージャー',
@@ -43,7 +55,7 @@ export const translations = {
   en: {
     settings: 'Settings',
     saved: 'Saved',
-    nav: { general: 'General', display: 'Display', preview: 'Preview', about: 'About' },
+    nav: { general: 'General', display: 'Display', preview: 'Preview', shortcuts: 'Shortcuts', about: 'About' },
     general: {
       title: 'General',
       language: 'Language', languageDesc: 'UI display language',
@@ -63,6 +75,18 @@ export const translations = {
       title: 'Preview',
       panelWidth: 'Default Panel Width',
       thumbSize: 'Thumbnail Size',
+    },
+    shortcuts: {
+      title: 'Command Shortcuts',
+      add: '+ Add', save: 'Save', cancel: 'Cancel', delete: 'Delete', edit: 'Edit',
+      labelField: 'Label', iconField: 'Icon (emoji)',
+      commandField: 'Command', commandHint: 'Multi-line supported. Use {input} to insert prompt value',
+      executionMode: 'Run in',
+      modeCurrentDir: 'Current folder', modeFixed: 'Fixed path',
+      fixedPathLabel: 'Path',
+      promptEnabled: 'Ask for additional input',
+      promptMessage: 'Prompt message', promptPlaceholder: 'Placeholder text',
+      empty: 'No shortcuts yet',
     },
     about: {
       title: 'About',

@@ -11,7 +11,15 @@ const FILETIME = windows.FILETIME;
 const INVALID_HANDLE_VALUE = windows.INVALID_HANDLE_VALUE;
 
 const FILE_ATTRIBUTE_DIRECTORY: DWORD = 0x10;
+const FILE_ATTRIBUTE_HIDDEN: DWORD = 0x02;
 const MAX_PATH = 260;
+
+// Drive type constants
+const DRIVE_REMOVABLE: u32 = 2;
+const DRIVE_FIXED: u32 = 3;
+const DRIVE_REMOTE: u32 = 4;
+const DRIVE_CDROM: u32 = 5;
+const DRIVE_RAMDISK: u32 = 6;
 
 const WIN32_FIND_DATAW = extern struct {
     dwFileAttributes: DWORD,
@@ -43,6 +51,7 @@ extern "kernel32" fn FindClose(hFindFile: HANDLE) callconv(.winapi) BOOL;
 const Entry = struct {
     name: []const u8,
     isDir: bool,
+    isHidden: bool,
     size: i64,
     modTime: []const u8,
     ext: []const u8,
@@ -102,6 +111,7 @@ fn listDir(alloc: std.mem.Allocator, path_utf8: []const u8, out: []u8) !usize {
             try list.append(.{
                 .name = name,
                 .isDir = is_dir,
+                .isHidden = find_data.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN != 0,
                 .size = size,
                 .modTime = mod_time,
                 .ext = ext,
@@ -149,4 +159,112 @@ fn cmpIgnoreCase(a: []const u8, b: []const u8) bool {
         if (ca > cb) return false;
     }
     return a.len < b.len;
+}
+
+// ── Drive info ─────────────────────────────────────────────────────────────
+
+extern "kernel32" fn GetLogicalDriveStringsW(
+    nBufferLength: DWORD,
+    lpBuffer: [*]WCHAR,
+) callconv(.winapi) DWORD;
+
+extern "kernel32" fn GetDiskFreeSpaceExW(
+    lpDirectoryName: [*:0]const WCHAR,
+    lpFreeBytesAvailable: *u64,
+    lpTotalNumberOfBytes: *u64,
+    lpTotalNumberOfFreeBytes: ?*u64,
+) callconv(.winapi) BOOL;
+
+extern "kernel32" fn GetVolumeInformationW(
+    lpRootPathName: [*:0]const WCHAR,
+    lpVolumeNameBuffer: ?[*]WCHAR,
+    nVolumeNameSize: DWORD,
+    lpVolumeSerialNumber: ?*DWORD,
+    lpMaximumComponentLength: ?*DWORD,
+    lpFileSystemFlags: ?*DWORD,
+    lpFileSystemNameBuffer: ?[*]WCHAR,
+    nFileSystemNameSize: DWORD,
+) callconv(.winapi) BOOL;
+
+extern "kernel32" fn GetDriveTypeW(
+    lpRootPathName: [*:0]const WCHAR,
+) callconv(.winapi) u32;
+
+const DriveEntry = struct {
+    path: []const u8,
+    label: []const u8,
+    driveType: []const u8,
+    freeBytes: u64,
+    totalBytes: u64,
+};
+
+/// List drives with disk usage as JSON.
+/// Returns bytes written, or -1 on error.
+export fn hue_get_drives(out_buf: [*]u8, buf_size: usize) i32 {
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const n = getDrives(alloc, out_buf[0..buf_size]) catch return -1;
+    return @intCast(n);
+}
+
+fn getDrives(alloc: std.mem.Allocator, out: []u8) !usize {
+    var raw: [512]WCHAR = undefined;
+    const total_len = GetLogicalDriveStringsW(@intCast(raw.len), &raw);
+    if (total_len == 0) return error.Failed;
+
+    var list = std.array_list.Managed(DriveEntry).init(alloc);
+
+    var i: usize = 0;
+    while (i < total_len) {
+        const seg = std.mem.sliceTo(raw[i..], 0);
+        if (seg.len == 0) break;
+        i += seg.len + 1;
+
+        // ローカルバッファに null 終端 WCHAR コピー (最大 8 文字 "C:\\\0")
+        var path_w: [8]WCHAR = @splat(0);
+        const copy_len = @min(seg.len, 7);
+        @memcpy(path_w[0..copy_len], seg[0..copy_len]);
+        const path_wz: [*:0]const WCHAR = @ptrCast(&path_w);
+
+        const path_utf8 = try std.unicode.utf16LeToUtf8Alloc(alloc, seg);
+
+        // ドライブ種別
+        const dtype = GetDriveTypeW(path_wz);
+        const drive_type: []const u8 = switch (dtype) {
+            DRIVE_REMOVABLE => "removable",
+            DRIVE_FIXED     => "fixed",
+            DRIVE_REMOTE    => "network",
+            DRIVE_CDROM     => "cdrom",
+            DRIVE_RAMDISK   => "ramdisk",
+            else            => "unknown",
+        };
+
+        // ボリュームラベル
+        var label_w: [256]WCHAR = @splat(0);
+        var label_utf8: []const u8 = "";
+        if (GetVolumeInformationW(path_wz, &label_w, @intCast(label_w.len),
+            null, null, null, null, 0) != .FALSE) {
+            const lw = std.mem.sliceTo(&label_w, 0);
+            label_utf8 = std.unicode.utf16LeToUtf8Alloc(alloc, lw) catch "";
+        }
+
+        // ディスク容量
+        var free: u64 = 0;
+        var total: u64 = 0;
+        _ = GetDiskFreeSpaceExW(path_wz, &free, &total, null);
+
+        try list.append(.{
+            .path      = path_utf8,
+            .label     = label_utf8,
+            .driveType = drive_type,
+            .freeBytes  = free,
+            .totalBytes = total,
+        });
+    }
+
+    var writer = std.Io.Writer.fixed(out);
+    try std.json.fmt(list.items, .{}).format(&writer);
+    return writer.end;
 }

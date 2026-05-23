@@ -1,15 +1,21 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 type App struct {
@@ -22,17 +28,204 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	wailsCtx = ctx
 	initZigFS()
 	initZigWatcher()
 	initZigThumb()
 	initZigPreview()
-	startSettingsServer()
+	initZigFileops()
+	initZigSearch()
+	a.subscribeSettingsEvents()
+}
+
+// ── デーモン管理 ──
+
+func isDevBinary() bool {
+	exe, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(filepath.Base(exe)), "-dev")
+}
+
+func isDaemonRunning() bool {
+	conn, err := net.DialTimeout("tcp", "127.0.0.1:9271", 500*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
+}
+
+func ensureDaemon() {
+	if isDevBinary() {
+		// dev モード: バイナリを共有しないようプロセス内でサーバーを起動
+		if !isDaemonRunning() {
+			startSettingsServer()
+		}
+		return
+	}
+	if isDaemonRunning() {
+		return
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	cmd := exec.Command(exe, "--daemon")
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		CreationFlags: 0x08000000 | 0x01000000, // CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB
+	}
+	if err := cmd.Start(); err != nil {
+		return
+	}
+	for i := 0; i < 20; i++ {
+		time.Sleep(100 * time.Millisecond)
+		if isDaemonRunning() {
+			return
+		}
+	}
+}
+
+// ── SSE サブスクライバー ──
+
+func (a *App) subscribeSettingsEvents() {
+	go func() {
+		for {
+			resp, err := http.Get("http://127.0.0.1:9271/api/settings/events")
+			if err != nil {
+				time.Sleep(2 * time.Second)
+				continue
+			}
+			scanner := bufio.NewScanner(resp.Body)
+			for scanner.Scan() {
+				if strings.HasPrefix(scanner.Text(), "data: changed") {
+					runtime.EventsEmit(a.ctx, "settings:changed")
+				}
+			}
+			resp.Body.Close()
+			time.Sleep(1 * time.Second)
+		}
+	}()
 }
 
 func (a *App) OpenSettings() {
-	// dev: requires `npm run dev` in apps/settings/frontend/
-	exec.Command("cmd", "/c", "start", "http://localhost:5200").Start()
+	exec.Command("cmd", "/c", "start", "http://localhost:9271").Start()
+}
+
+func (a *App) GetStartupPath() string {
+	return startupPath
+}
+
+func (a *App) RunCommandShortcut(id string, currentPath string, extraInput string) error {
+	s := fetchSettings()
+	var sc *CommandShortcut
+	for i := range s.CommandShortcuts {
+		if s.CommandShortcuts[i].ID == id {
+			sc = &s.CommandShortcuts[i]
+			break
+		}
+	}
+	if sc == nil {
+		return fmt.Errorf("shortcut not found: %s", id)
+	}
+
+	workDir := currentPath
+	if sc.ExecutionMode == "fixed" && sc.FixedPath != "" {
+		workDir = sc.FixedPath
+	}
+
+	command := sc.Command
+	if sc.PromptEnabled && extraInput != "" {
+		if strings.Contains(command, "{input}") {
+			command = strings.ReplaceAll(command, "{input}", extraInput)
+		} else {
+			command = strings.TrimSpace(command) + " " + extraInput
+		}
+	}
+
+	go a.runCommandInConsole(sc.Label, workDir, command)
+	return nil
+}
+
+// ExecInConsole はインタラクティブコンソールからコマンドを実行する（コンソールをクリアしない）
+func (a *App) ExecInConsole(cwd, command string) {
+	go a.streamCommand(cwd, command, false)
+}
+
+func (a *App) runCommandInConsole(label, workDir, command string) {
+	// ショートカット実行: console:start でコンソールをクリアしてから実行
+	lines := strings.Split(strings.TrimSpace(command), "\n")
+	var parts []string
+	for _, line := range lines {
+		if l := strings.TrimSpace(line); l != "" {
+			parts = append(parts, l)
+		}
+	}
+	if len(parts) == 0 {
+		return
+	}
+	runtime.EventsEmit(a.ctx, "console:start", label)
+	a.streamCommand(workDir, strings.Join(parts, " && "), true)
+}
+
+func (a *App) streamCommand(workDir, command string, emitStart bool) {
+	emit := func(typ, text string) {
+		runtime.EventsEmit(a.ctx, "console:line", map[string]string{"type": typ, "text": text})
+	}
+
+	if command == "" {
+		return
+	}
+
+	if emitStart {
+		emit("system", fmt.Sprintf("> %s", command))
+	}
+
+	cmd := exec.Command("cmd", "/c", "chcp 65001 >nul 2>&1 && "+command)
+	cmd.Dir = workDir
+	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8")
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 0x08000000} // CREATE_NO_WINDOW
+
+	stdout, _ := cmd.StdoutPipe()
+	stderr, _ := cmd.StderrPipe()
+
+	if err := cmd.Start(); err != nil {
+		emit("stderr", "起動エラー: "+err.Error())
+		runtime.EventsEmit(a.ctx, "console:done", 1)
+		return
+	}
+
+	scan := func(r interface{ Scan() bool; Text() string }, typ string) {
+		for r.Scan() {
+			emit(typ, r.Text())
+		}
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); scan(bufio.NewScanner(stdout), "stdout") }()
+	go func() { defer wg.Done(); scan(bufio.NewScanner(stderr), "stderr") }()
+	wg.Wait()
+
+	exitCode := 0
+	if err := cmd.Wait(); err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		}
+	}
+	runtime.EventsEmit(a.ctx, "console:done", exitCode)
+}
+
+func (a *App) OpenInNewWindow(path string) {
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	cmd := exec.Command(exe, "--path="+path)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		CreationFlags: 0x01000000, // CREATE_BREAKAWAY_FROM_JOB
+	}
+	cmd.Start()
 }
 
 type FileEntry struct {
@@ -65,12 +258,18 @@ func (a *App) GetHomeDir() string {
 	return home
 }
 
-func (a *App) GetDrives() []string {
-	var drives []string
+func (a *App) GetDrives() []DriveInfo {
+	if zigFS != nil {
+		if drives, err := zigFS.listDrives(); err == nil {
+			return drives
+		}
+	}
+	// フォールバック: パスのみ返す
+	var drives []DriveInfo
 	for _, letter := range "ABCDEFGHIJKLMNOPQRSTUVWXYZ" {
 		path := string(letter) + ":\\"
 		if _, err := os.Stat(path); err == nil {
-			drives = append(drives, path)
+			drives = append(drives, DriveInfo{Path: path})
 		}
 	}
 	return drives
@@ -82,7 +281,6 @@ func (a *App) ListDirectory(path string) ([]FileEntry, error) {
 		if entries, err := zigFS.listDirectory(path); err == nil {
 			return entries, nil
 		}
-		// Zig DLL が失敗したら Go 実装にフォールバック
 	}
 	return goListDirectory(path)
 }
@@ -125,6 +323,15 @@ func goListDirectory(path string) ([]FileEntry, error) {
 	return files, nil
 }
 
+func (a *App) SearchFiles(root, query string) []SearchEntry {
+	if zigSearch != nil {
+		if results, err := zigSearch.search(root, query); err == nil {
+			return results
+		}
+	}
+	return goSearch(root, query)
+}
+
 func (a *App) GetParentDir(path string) string {
 	parent := filepath.Dir(path)
 	if parent == path {
@@ -138,6 +345,9 @@ func (a *App) OpenFile(path string) error {
 }
 
 func (a *App) DeleteItem(path string) error {
+	if zigFileops != nil {
+		return zigFileops.deleteItem(path)
+	}
 	return os.RemoveAll(path)
 }
 
@@ -149,6 +359,14 @@ func (a *App) CreateFolder(parentPath, name string) error {
 	return os.MkdirAll(filepath.Join(parentPath, name), 0755)
 }
 
+func (a *App) CreateFile(parentPath, name string) error {
+	f, err := os.OpenFile(filepath.Join(parentPath, name), os.O_CREATE|os.O_EXCL, 0644)
+	if err != nil {
+		return err
+	}
+	return f.Close()
+}
+
 func (a *App) CopyItem(src, dstDir string) error {
 	name := filepath.Base(src)
 	dst := filepath.Join(dstDir, name)
@@ -157,7 +375,10 @@ func (a *App) CopyItem(src, dstDir string) error {
 	} else if _, err := os.Stat(dst); err == nil {
 		dst = uniqueCopyPath(dstDir, name)
 	}
-	return copyPath(src, dst)
+	if zigFileops != nil {
+		return zigFileops.copyItem(src, dst)
+	}
+	return goCopyPath(src, dst)
 }
 
 func uniqueCopyPath(dir, name string) string {
@@ -177,27 +398,30 @@ func uniqueCopyPath(dir, name string) string {
 
 func (a *App) MoveItem(src, dstDir string) error {
 	dst := filepath.Join(dstDir, filepath.Base(src))
+	if zigFileops != nil {
+		return zigFileops.moveItem(src, dst)
+	}
 	if err := os.Rename(src, dst); err == nil {
 		return nil
 	}
-	if err := copyPath(src, dst); err != nil {
+	if err := goCopyPath(src, dst); err != nil {
 		return err
 	}
 	return os.RemoveAll(src)
 }
 
-func copyPath(src, dst string) error {
+func goCopyPath(src, dst string) error {
 	info, err := os.Stat(src)
 	if err != nil {
 		return err
 	}
 	if info.IsDir() {
-		return copyDir(src, dst)
+		return goCopyDir(src, dst)
 	}
-	return copyFile(src, dst)
+	return goCopyFile(src, dst)
 }
 
-func copyFile(src, dst string) error {
+func goCopyFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
 		return err
@@ -228,7 +452,7 @@ func copyFile(src, dst string) error {
 	return nil
 }
 
-func copyDir(src, dst string) error {
+func goCopyDir(src, dst string) error {
 	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -238,6 +462,6 @@ func copyDir(src, dst string) error {
 		if info.IsDir() {
 			return os.MkdirAll(target, info.Mode())
 		}
-		return copyFile(path, target)
+		return goCopyFile(path, target)
 	})
 }

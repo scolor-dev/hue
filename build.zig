@@ -57,4 +57,28 @@ pub fn build(b: *std.Build) void {
     });
 
     b.installArtifact(preview_lib);
+
+    const fileops_lib = b.addLibrary(.{
+        .name = "hue_fileops",
+        .linkage = .dynamic,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("core/fileops/src/fileops.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+
+    b.installArtifact(fileops_lib);
+
+    const search_lib = b.addLibrary(.{
+        .name = "hue_search",
+        .linkage = .dynamic,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("core/search/src/search.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+
+    b.installArtifact(search_lib);
 }

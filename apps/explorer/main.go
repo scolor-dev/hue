@@ -2,6 +2,8 @@ package main
 
 import (
 	"embed"
+	"os"
+	"strings"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -11,11 +13,22 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
-func main() {
-	// Create an instance of the app structure
-	app := NewApp()
+var startupPath string
 
-	// Create application with options
+func main() {
+	for _, arg := range os.Args[1:] {
+		if arg == "--daemon" {
+			runDaemon()
+			return
+		}
+		if strings.HasPrefix(arg, "--path=") {
+			startupPath = strings.TrimPrefix(arg, "--path=")
+		}
+	}
+
+	ensureDaemon()
+
+	app := NewApp()
 	err := wails.Run(&options.App{
 		Title:  "Hue",
 		Width:  960,
@@ -28,8 +41,13 @@ func main() {
 		Bind: []interface{}{
 			app,
 		},
+		DragAndDrop: &options.DragAndDrop{
+			EnableFileDrop:     true,
+			DisableWebViewDrop: false,
+			CSSDropProperty:    "--wails-drop-target",
+			CSSDropValue:       "drop",
+		},
 	})
-
 	if err != nil {
 		println("Error:", err.Error())
 	}

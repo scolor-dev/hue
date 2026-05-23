@@ -1,28 +1,37 @@
 <script>
-  import { onMount } from 'svelte'
+  import { onMount, tick } from 'svelte'
   import { ListDirectory, GetHomeDir, GetDrives, GetParentDir, OpenFile,
-           DeleteItem, RenameItem, CreateFolder, CopyItem, MoveItem,
-           GetThumbnail, GetPreview, OpenSettings, GetSettings } from '../wailsjs/go/main/App'
-  import { EventsOn } from '../wailsjs/runtime/runtime'
+           DeleteItem, RenameItem, CreateFolder, CreateFile, CopyItem, MoveItem,
+           GetThumbnail, GetPreview, OpenSettings, GetSettings,
+           AddFavorite, RemoveFavorite,
+           GetStartupPath, OpenInNewWindow, ExecInConsole, SearchFiles } from '../wailsjs/go/main/App'
+  import { EventsOn, OnFileDrop } from '../wailsjs/runtime/runtime'
+  import TreeSidebar from './TreeSidebar.svelte'
+  import ConsolePane from './ConsolePane.svelte'
 
   let currentPath = ''
   let entries = []
   let history = []
   let historyIndex = -1
-  let selectedPath = ''
+  let selectedPaths = new Set()   // マルチセレクト
+  let selectedPath = ''           // フォーカス中アイテム（プレビュー用）
+  let lastClickedPath = ''        // Shift+クリックの起点
   let error = ''
-  let drives = []
+  let drives = [] // DriveInfo[]
 
   // 右クリックメニュー
   let contextMenu = { visible: false, x: 0, y: 0, target: null }
+  let contextMenuEl = null
 
   // 名前変更
   let renamingPath = ''
   let renameValue = ''
 
-  // 新規フォルダ
+  // 新規フォルダ・ファイル
   let creatingFolder = false
   let newFolderName = ''
+  let creatingFile = false
+  let newFileName = ''
 
   // クリップボード
   let clipboard = null // { path, op: 'copy' | 'cut' }
@@ -35,32 +44,54 @@
   // 翻訳
   const tr = {
     ja: {
+      sidebarLabel: 'フォルダ',
+      shortcutsLabel: 'ショートカット',
+      favoritesLabel: 'お気に入り',
+      addFavorite: 'お気に入りに追加',
+      removeFavorite: 'お気に入りから削除',
+      searchPlaceholder: '検索... (Ctrl+F)',
+      searchCount: (n) => `${n} 件の検索結果`,
+      searchEmpty: '見つかりませんでした',
+      searching: '検索中...',
       back: '戻る', forward: '進む', up: '上へ', refresh: '更新', settingsBtn: '設定',
       colName: '名前', colSize: 'サイズ', colDate: '更新日時',
-      openFolder: 'フォルダを開く', open: '開く',
+      openFolder: 'フォルダを開く', open: '開く', openNewWindow: '新しいウィンドウで開く', openConsole: 'コンソールで開く',
       copy: 'コピー', cut: '切り取り', paste: '貼り付け',
-      newFolder: '新規フォルダー', rename: '名前の変更', delete: '削除',
+      newFolder: '新規フォルダー', newFile: '新規ファイル', rename: '名前の変更', delete: '削除',
       countItems: (n) => `${n} 件`,
       selectedLabel: (name) => `${name} を選択中`,
-      clipboardLabel: (op) => `クリップボード: ${op === 'copy' ? 'コピー' : '切り取り'}`,
+      selectedMultiLabel: (n) => `${n} 件選択中`,
+      clipboardLabel: (op, n) => `クリップボード: ${op === 'copy' ? 'コピー' : '切り取り'}${n > 1 ? ` (${n} 件)` : ''}`,
       confirmDelete: (name) => `「${name}」を削除しますか？`,
       defaultFolderName: '新しいフォルダー',
+      defaultFileName: '新しいファイル.txt',
       truncated: '省略',
       relNow: 'たった今',
       relMin: (n) => `${n}分前`, relHr: (n) => `${n}時間前`,
       relDay: (n) => `${n}日前`, relMo: (n) => `${n}ヶ月前`, relYr: (n) => `${n}年前`,
     },
     en: {
+      sidebarLabel: 'Folders',
+      shortcutsLabel: 'Shortcuts',
+      favoritesLabel: 'Favorites',
+      addFavorite: 'Add to Favorites',
+      removeFavorite: 'Remove from Favorites',
+      searchPlaceholder: 'Search... (Ctrl+F)',
+      searchCount: (n) => `${n} result${n !== 1 ? 's' : ''}`,
+      searchEmpty: 'No results found',
+      searching: 'Searching...',
       back: 'Back', forward: 'Forward', up: 'Up', refresh: 'Refresh', settingsBtn: 'Settings',
       colName: 'Name', colSize: 'Size', colDate: 'Modified',
-      openFolder: 'Open Folder', open: 'Open',
+      openFolder: 'Open Folder', open: 'Open', openNewWindow: 'Open in New Window', openConsole: 'Open in Console',
       copy: 'Copy', cut: 'Cut', paste: 'Paste',
-      newFolder: 'New Folder', rename: 'Rename', delete: 'Delete',
+      newFolder: 'New Folder', newFile: 'New File', rename: 'Rename', delete: 'Delete',
       countItems: (n) => `${n} item${n !== 1 ? 's' : ''}`,
       selectedLabel: (name) => `${name} selected`,
-      clipboardLabel: (op) => `Clipboard: ${op === 'copy' ? 'Copy' : 'Cut'}`,
+      selectedMultiLabel: (n) => `${n} items selected`,
+      clipboardLabel: (op, n) => `Clipboard: ${op === 'copy' ? 'Copy' : 'Cut'}${n > 1 ? ` (${n})` : ''}`,
       confirmDelete: (name) => `Delete "${name}"?`,
       defaultFolderName: 'New Folder',
+      defaultFileName: 'New File.txt',
       truncated: 'truncated',
       relNow: 'just now',
       relMin: (n) => `${n}m ago`, relHr: (n) => `${n}h ago`,
@@ -80,6 +111,8 @@
     sortAsc: true,
     showExtensions: true,
     confirmDelete: true,
+    favorites: [],
+    commandShortcuts: [],
   }
 
   // 設定適用: フィルタ + ソート
@@ -96,6 +129,87 @@
     })
     return list
   })()
+
+  $: activeList = searchQuery ? searchResults : visibleEntries
+
+  function scrollRowIntoView(path) {
+    const el = [...document.querySelectorAll('[data-path]')].find(el => el.getAttribute('data-path') === path)
+    el?.scrollIntoView({ block: 'nearest' })
+  }
+
+  async function navigateList(entry, shift) {
+    if (shift) {
+      const next = new Set(selectedPaths)
+      next.add(entry.path)
+      selectedPaths = next
+      selectedPath = entry.path
+    } else if (searchQuery) {
+      selectedPaths = new Set([entry.path])
+      selectedPath = entry.path
+      lastClickedPath = entry.path
+    } else {
+      await selectEntry(entry.path)
+    }
+    scrollRowIntoView(entry.path)
+  }
+
+  // 検索
+  let searchQuery = ''
+  let searchResults = []
+  let searchRunning = false
+  let searchTimer = null
+  let searchInputEl = null
+
+  function onSearchInput(e) {
+    searchQuery = e.target.value
+    clearTimeout(searchTimer)
+    if (!searchQuery.trim()) { searchResults = []; return }
+    searchTimer = setTimeout(doSearch, 300)
+  }
+
+  async function doSearch() {
+    if (!searchQuery.trim()) return
+    searchRunning = true
+    try {
+      searchResults = (await SearchFiles(currentPath, searchQuery.trim())) ?? []
+    } catch { searchResults = [] }
+    searchRunning = false
+  }
+
+  function clearSearch() {
+    searchQuery = ''
+    searchResults = []
+    clearTimeout(searchTimer)
+    searchRunning = false
+  }
+
+  async function openSearchResult(entry) {
+    clearSearch()
+    if (entry.isDir) {
+      await navigate(entry.path)
+    } else {
+      const parent = await GetParentDir(entry.path)
+      if (parent) {
+        await navigate(parent)
+        selectedPath = entry.path
+      }
+    }
+  }
+
+  // コンソールパネル
+  let consoleVisible = false
+  let consoleRunning = false
+  let consoleLabel = ''
+  let consoleLines = []
+  let consoleSeq = 0
+  let consoleCwd = ''
+
+  function consolePush(type, text) {
+    consoleLines = [...consoleLines, { id: consoleSeq++, type, text }]
+  }
+
+  // ドラッグ＆ドロップ
+  let dropOver = false
 
   // プレビューパネル リサイズ
   let previewWidth = 220
@@ -122,26 +236,70 @@
   }
 
   async function applySettings(s) {
-    settings = s
+    settings = { ...s, favorites: s.favorites ?? [] }
     previewWidth = s.previewWidth
+  }
+
+  async function doAddFavorite(path) {
+    await AddFavorite(path)
+    const updated = await GetSettings()
+    await applySettings(updated)
+  }
+
+  async function doRemoveFavorite(path) {
+    await RemoveFavorite(path)
+    const updated = await GetSettings()
+    await applySettings(updated)
   }
 
   onMount(async () => {
     const s = await GetSettings()
     await applySettings(s)
     drives = await GetDrives()
-    const home = await GetHomeDir()
-    await navigate(home)
+    const startupPath = await GetStartupPath()
+    const initialPath = startupPath || await GetHomeDir()
+    await navigate(initialPath)
     window.addEventListener('click', closeContextMenu)
+    OnFileDrop(async (_x, _y, paths) => {
+      dropOver = false
+      if (!currentPath || paths.length === 0) return
+      let failed = []
+      for (const p of paths) {
+        try { await CopyItem(p, currentPath) }
+        catch { failed.push(p) }
+      }
+      if (failed.length) error = `コピー失敗: ${failed.join(', ')}`
+      await refresh()
+    }, true)
     EventsOn('fs:changed', () => refresh())
     EventsOn('settings:changed', async () => {
       const updated = await GetSettings()
       await applySettings(updated)
       await refresh()
     })
+    EventsOn('console:start', (lbl) => {
+      consoleLabel = lbl
+      consoleLines = []
+      consoleSeq = 0
+      consoleRunning = true
+      consoleVisible = true
+      if (!consoleCwd) consoleCwd = currentPath
+    })
+    EventsOn('console:line', (msg) => {
+      consolePush(msg.type, msg.text)
+    })
+    EventsOn('console:done', (code) => {
+      consoleRunning = false
+      if (code === 0) {
+        consolePush('done-ok', `✓ 完了 (exit 0)`)
+      } else {
+        consolePush('done-err', `✗ 終了コード ${code}`)
+      }
+    })
   })
 
   async function navigate(path) {
+    clearSearch()
     try {
       const result = await ListDirectory(path)
       entries = result ?? []
@@ -152,7 +310,9 @@
       }
       history = [...history, path]
       historyIndex = history.length - 1
+      selectedPaths = new Set()
       selectedPath = ''
+      lastClickedPath = ''
     } catch (e) {
       error = String(e)
     }
@@ -160,6 +320,8 @@
 
   async function selectEntry(path) {
     selectedPath = path
+    selectedPaths = new Set([path])
+    lastClickedPath = path
     thumbnailSrc = ''
     preview = null
     const entry = entries.find(e => e.path === path)
@@ -172,10 +334,45 @@
     }
   }
 
+  async function handleRowClick(entry, e) {
+    if (e.ctrlKey) {
+      const next = new Set(selectedPaths)
+      if (next.has(entry.path)) {
+        next.delete(entry.path)
+        if (selectedPath === entry.path) selectedPath = [...next][0] ?? ''
+      } else {
+        next.add(entry.path)
+        selectedPath = entry.path
+      }
+      selectedPaths = next
+      lastClickedPath = entry.path
+    } else if (e.shiftKey && lastClickedPath) {
+      const paths = activeList.map(e => e.path)
+      const a = paths.indexOf(lastClickedPath)
+      const b = paths.indexOf(entry.path)
+      if (a !== -1 && b !== -1) {
+        const [lo, hi] = a <= b ? [a, b] : [b, a]
+        const next = new Set(selectedPaths)
+        for (let i = lo; i <= hi; i++) next.add(paths[i])
+        selectedPaths = next
+        selectedPath = entry.path
+      }
+    } else if (searchQuery) {
+      selectedPaths = new Set([entry.path])
+      selectedPath = entry.path
+      lastClickedPath = entry.path
+    } else {
+      await selectEntry(entry.path)
+    }
+  }
+
   async function refresh() {
     if (!currentPath) return
     try {
       entries = (await ListDirectory(currentPath)) ?? []
+      const existingPaths = new Set(entries.map(e => e.path))
+      selectedPaths = new Set([...selectedPaths].filter(p => existingPaths.has(p)))
+      if (!existingPaths.has(selectedPath)) selectedPath = ''
       error = ''
     } catch (e) { error = String(e) }
   }
@@ -221,18 +418,54 @@
 
   // ── キーボードショートカット ──
   async function handleKeydown(e) {
-    if (renamingPath || creatingFolder) return
+    if (document.activeElement === searchInputEl) {
+      if (e.key === 'Escape') clearSearch()
+      return
+    }
+    if (renamingPath || creatingFolder || creatingFile) return
 
-    if (e.key === 'Delete' && selectedPath) {
-      await doDelete(selectedPath)
-    } else if (e.key === 'F2' && selectedPath) {
+    if (e.ctrlKey && e.key === 'f') {
+      e.preventDefault()
+      searchInputEl?.focus()
+      return
+    }
+
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      const idx = activeList.findIndex(e => e.path === selectedPath)
+      const next = e.key === 'ArrowDown'
+        ? (idx === -1 ? 0 : Math.min(idx + 1, activeList.length - 1))
+        : (idx === -1 ? activeList.length - 1 : Math.max(idx - 1, 0))
+      if (activeList[next]) await navigateList(activeList[next], e.shiftKey)
+    } else if (e.key === 'Home') {
+      e.preventDefault()
+      if (activeList[0]) await navigateList(activeList[0], e.shiftKey)
+    } else if (e.key === 'End') {
+      e.preventDefault()
+      const last = activeList.at(-1)
+      if (last) await navigateList(last, e.shiftKey)
+    } else if (e.key === 'Enter' && selectedPath && selectedPaths.size === 1) {
+      const entry = activeList.find(e => e.path === selectedPath)
+      if (entry) {
+        if (searchQuery) await openSearchResult(entry)
+        else await onEnter(entry)
+      }
+    } else if (e.key === 'Backspace' && !searchQuery) {
+      await goUp()
+    } else if (e.key === 'Delete' && selectedPaths.size > 0) {
+      await doDelete([...selectedPaths])
+    } else if (e.key === 'F2' && selectedPath && selectedPaths.size === 1) {
       startRename(selectedPath)
     } else if (e.key === 'F5') {
       await refresh()
-    } else if (e.ctrlKey && e.key === 'c' && selectedPath) {
-      clipboard = { path: selectedPath, op: 'copy' }
-    } else if (e.ctrlKey && e.key === 'x' && selectedPath) {
-      clipboard = { path: selectedPath, op: 'cut' }
+    } else if (e.ctrlKey && e.key === 'a') {
+      e.preventDefault()
+      selectedPaths = new Set(visibleEntries.map(e => e.path))
+      selectedPath = visibleEntries.at(-1)?.path ?? ''
+    } else if (e.ctrlKey && e.key === 'c' && selectedPaths.size > 0) {
+      clipboard = { paths: [...selectedPaths], op: 'copy' }
+    } else if (e.ctrlKey && e.key === 'x' && selectedPaths.size > 0) {
+      clipboard = { paths: [...selectedPaths], op: 'cut' }
     } else if (e.ctrlKey && e.key === 'v' && clipboard) {
       await doPaste()
     } else if (e.ctrlKey && e.shiftKey && e.key === 'N') {
@@ -240,16 +473,21 @@
     } else if (e.key === 'Escape') {
       renamingPath = ''
       creatingFolder = false
+      creatingFile = false
     }
   }
 
   // ── 削除 ──
-  async function doDelete(path) {
-    const name = entries.find(e => e.path === path)?.name ?? path
+  async function doDelete(paths) {
+    const count = paths.length
+    const name = count === 1
+      ? (entries.find(e => e.path === paths[0])?.name ?? paths[0])
+      : t.countItems(count)
     if (settings.confirmDelete && !confirm(t.confirmDelete(name))) return
     try {
-      await DeleteItem(path)
-      if (selectedPath === path) selectedPath = ''
+      for (const p of paths) await DeleteItem(p)
+      selectedPaths = new Set()
+      selectedPath = ''
       await refresh()
     } catch (e) { error = String(e) }
   }
@@ -292,25 +530,62 @@
     } catch (e) { error = String(e); creatingFolder = false }
   }
 
+  // ── 新規ファイル ──
+  function startCreateFile() {
+    creatingFile = true
+    newFileName = t.defaultFileName
+    setTimeout(() => {
+      const el = document.getElementById('new-file-input')
+      if (!el) return
+      el.focus()
+      const dot = newFileName.lastIndexOf('.')
+      el.setSelectionRange(0, dot > 0 ? dot : newFileName.length)
+    }, 0)
+  }
+
+  async function commitCreateFile() {
+    if (!newFileName.trim()) { creatingFile = false; return }
+    try {
+      await CreateFile(currentPath, newFileName.trim())
+      creatingFile = false
+      await refresh()
+    } catch (e) { error = String(e); creatingFile = false }
+  }
+
   // ── コピー・貼り付け ──
   async function doPaste() {
     if (!clipboard) return
     try {
-      if (clipboard.op === 'copy') {
-        await CopyItem(clipboard.path, currentPath)
-      } else {
-        await MoveItem(clipboard.path, currentPath)
-        clipboard = null
+      for (const path of clipboard.paths) {
+        if (clipboard.op === 'copy') {
+          await CopyItem(path, currentPath)
+        } else {
+          await MoveItem(path, currentPath)
+        }
       }
+      if (clipboard.op === 'cut') clipboard = null
       await refresh()
     } catch (e) { error = String(e) }
   }
 
   // ── 右クリックメニュー ──
-  function openContextMenu(e, entry) {
+  async function openContextMenu(e, entry) {
     e.preventDefault()
-    contextMenu = { visible: true, x: e.clientX, y: e.clientY, target: entry }
-    if (entry) selectedPath = entry.path
+    if (entry && !selectedPaths.has(entry.path)) {
+      selectedPaths = new Set([entry.path])
+      selectedPath = entry.path
+      lastClickedPath = entry.path
+    }
+    const paths = entry ? [...selectedPaths] : []
+    contextMenu = { visible: true, x: e.clientX, y: e.clientY, target: entry, paths }
+    await tick()
+    if (!contextMenuEl) return
+    const rect = contextMenuEl.getBoundingClientRect()
+    let x = contextMenu.x
+    let y = contextMenu.y
+    if (x + rect.width  > window.innerWidth)  x = window.innerWidth  - rect.width  - 4
+    if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 4
+    contextMenu = { ...contextMenu, x: Math.max(0, x), y: Math.max(0, y) }
   }
 
   function closeContextMenu() {
@@ -375,8 +650,10 @@
     <button on:click={goUp} title={t.up}>&#8593;</button>
     <button on:click={refresh} title={t.refresh}>&#8635;</button>
     <div class="drives">
-      {#each drives as drive}
-        <button class="drive-btn" on:click={() => navigate(drive)}>{drive}</button>
+      {#each drives as d}
+        <button class="drive-btn" on:click={() => navigate(d.path)} title={d.label || d.path}>
+          {d.path[0]}:
+        </button>
       {/each}
     </div>
     <input
@@ -385,6 +662,22 @@
       on:keydown={handleAddressKeydown}
       spellcheck="false"
     />
+    <div class="search-box" class:active={searchQuery}>
+      <span class="search-icon">⌕</span>
+      <input
+        class="search-input"
+        bind:this={searchInputEl}
+        type="text"
+        placeholder={t.searchPlaceholder}
+        value={searchQuery}
+        on:input={onSearchInput}
+        on:keydown={(e) => e.stopPropagation()}
+        spellcheck="false"
+      />
+      {#if searchQuery}
+        <button class="search-clear" on:click={clearSearch} tabindex="-1">✕</button>
+      {/if}
+    </div>
     <button on:click={OpenSettings} title={t.settingsBtn}>&#9881;</button>
   </div>
 
@@ -393,6 +686,19 @@
   {/if}
 
   <div class="content-area">
+  <TreeSidebar
+    {drives}
+    {currentPath}
+    onNavigate={navigate}
+    label={t.sidebarLabel}
+    favorites={settings.favorites}
+    onRemoveFavorite={doRemoveFavorite}
+    favoritesLabel={t.favoritesLabel}
+    removeLabel={t.removeFavorite}
+    shortcuts={settings.commandShortcuts ?? []}
+    shortcutsLabel={t.shortcutsLabel}
+  />
+
   <div class="file-list" on:contextmenu={(e) => openContextMenu(e, null)}>
     <div class="file-list-header">
       <span class="col-icon"></span>
@@ -400,13 +706,50 @@
       <span class="col-size">{t.colSize}</span>
       <span class="col-modified">{t.colDate}</span>
     </div>
-    <div class="file-list-body">
+    <div class="file-list-body"
+      class:drop-over={dropOver}
+      style="--wails-drop-target: drop"
+      on:dragenter={() => dropOver = true}
+      on:dragleave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) dropOver = false }}
+      on:dragover={(e) => { e.preventDefault(); dropOver = true }}
+      on:drop={() => dropOver = false}
+      on:click={(e) => { if (e.target === e.currentTarget) { selectedPaths = new Set(); selectedPath = '' } }}
+    >
+      {#if searchQuery}
+        {#if searchRunning}
+          <div class="search-status">{t.searching}</div>
+        {:else if searchResults.length === 0}
+          <div class="search-status">{t.searchEmpty}</div>
+        {:else}
+          {#each searchResults as entry (entry.path)}
+            <div
+              class="file-row"
+              class:selected={selectedPaths.has(entry.path)}
+              data-path={entry.path}
+              on:click={(e) => handleRowClick(entry, e)}
+              on:dblclick={() => openSearchResult(entry)}
+              on:contextmenu={(e) => { e.stopPropagation(); openContextMenu(e, entry) }}
+              role="row"
+              tabindex="0"
+            >
+              <span class="col-icon">{getIcon(entry)}</span>
+              <span class="col-name search-result-name">
+                <span class="result-filename">{entry.name}</span>
+                <span class="result-dir">{entry.path.slice(0, entry.path.length - entry.name.length - 1)}</span>
+              </span>
+              <span class="col-size">{formatSize(entry.size, entry.isDir)}</span>
+              <span class="col-modified"></span>
+            </div>
+          {/each}
+        {/if}
+      {:else}
       {#each visibleEntries as entry (entry.path)}
         <div
           class="file-row"
-          class:selected={selectedPath === entry.path}
-          class:cut={clipboard?.op === 'cut' && clipboard?.path === entry.path}
-          on:click={() => selectEntry(entry.path)}
+          class:selected={selectedPaths.has(entry.path)}
+          class:cut={clipboard?.op === 'cut' && clipboard?.paths?.includes(entry.path)}
+          data-path={entry.path}
+          on:click={(e) => handleRowClick(entry, e)}
           on:dblclick={() => onEnter(entry)}
           on:contextmenu={(e) => { e.stopPropagation(); openContextMenu(e, entry) }}
           on:keydown={(e) => e.key === 'Enter' && onEnter(entry)}
@@ -455,10 +798,29 @@
           </span>
         </div>
       {/if}
+      {#if creatingFile}
+        <div class="file-row">
+          <span class="col-icon">📄</span>
+          <span class="col-name">
+            <input
+              id="new-file-input"
+              class="rename-input"
+              bind:value={newFileName}
+              on:keydown={(e) => {
+                if (e.key === 'Enter') commitCreateFile()
+                if (e.key === 'Escape') creatingFile = false
+                e.stopPropagation()
+              }}
+              on:blur={commitCreateFile}
+            />
+          </span>
+        </div>
+      {/if}
+      {/if}
     </div>
   </div>
 
-  {#if selectedPath && (thumbnailSrc || preview)}
+  {#if selectedPaths.size <= 1 && selectedPath && (thumbnailSrc || preview)}
     {#each [entries.find(e => e.path === selectedPath)] as entry}
     <div class="resizer" on:mousedown={onResizerMousedown} on:keydown={() => {}} class:resizing role="separator" aria-orientation="vertical"></div>
     <div class="preview-pane" style="width:{previewWidth}px">
@@ -483,30 +845,67 @@
 
   </div>
 
+  {#if consoleVisible}
+    <ConsolePane
+      lines={consoleLines}
+      running={consoleRunning}
+      label={consoleLabel}
+      cwd={consoleCwd}
+      onClose={() => { consoleVisible = false }}
+      onClear={() => { consoleLines = []; consoleSeq = 0 }}
+      onRun={(cmd) => {
+        consolePush('system', `> ${cmd}`)
+        consoleRunning = true
+        ExecInConsole(consoleCwd, cmd)
+      }}
+    />
+  {/if}
+
   <div class="statusbar">
-    {t.countItems(visibleEntries.length)}
-    {#if selectedPath}
+    {#if searchQuery}
+      {searchRunning ? t.searching : t.searchCount(searchResults.length)}
+    {:else}
+      {t.countItems(visibleEntries.length)}
+    {/if}
+    {#if selectedPaths.size > 1}
+      &nbsp;·&nbsp;{t.selectedMultiLabel(selectedPaths.size)}
+    {:else if selectedPath}
       &nbsp;·&nbsp;{t.selectedLabel(entries.find(e => e.path === selectedPath)?.name ?? '')}
     {/if}
     {#if clipboard}
-      &nbsp;·&nbsp;{t.clipboardLabel(clipboard.op)}
+      &nbsp;·&nbsp;{t.clipboardLabel(clipboard.op, clipboard.paths.length)}
     {/if}
   </div>
 </main>
 
 {#if contextMenu.visible}
-  <div class="context-menu" style="left:{contextMenu.x}px; top:{contextMenu.y}px">
+  <div class="context-menu" bind:this={contextMenuEl} style="left:{contextMenu.x}px; top:{contextMenu.y}px">
     {#if contextMenu.target}
       <!-- ファイル / フォルダ上 -->
-      <button on:click={() => { onEnter(contextMenu.target); closeContextMenu() }}>
-        {contextMenu.target.isDir ? t.openFolder : t.open}
+      {#if contextMenu.paths.length === 1}
+        <button on:click={() => { onEnter(contextMenu.target); closeContextMenu() }}>
+          {contextMenu.target.isDir ? t.openFolder : t.open}
+        </button>
+        {#if contextMenu.target.isDir}
+          <button on:click={() => { OpenInNewWindow(contextMenu.target.path); closeContextMenu() }}>
+            {t.openNewWindow}
+          </button>
+          <button on:click={() => {
+            consoleCwd = contextMenu.target.path
+            consoleVisible = true
+            consoleLabel = 'コンソール'
+            closeContextMenu()
+          }}>
+            {t.openConsole}
+          </button>
+        {/if}
+        <hr />
+      {/if}
+      <button on:click={() => { clipboard = { paths: contextMenu.paths, op: 'copy' }; closeContextMenu() }}>
+        {t.copy}{contextMenu.paths.length > 1 ? ` (${contextMenu.paths.length})` : ''} <span class="shortcut">Ctrl+C</span>
       </button>
-      <hr />
-      <button on:click={() => { clipboard = { path: contextMenu.target.path, op: 'copy' }; closeContextMenu() }}>
-        {t.copy} <span class="shortcut">Ctrl+C</span>
-      </button>
-      <button on:click={() => { clipboard = { path: contextMenu.target.path, op: 'cut' }; closeContextMenu() }}>
-        {t.cut} <span class="shortcut">Ctrl+X</span>
+      <button on:click={() => { clipboard = { paths: contextMenu.paths, op: 'cut' }; closeContextMenu() }}>
+        {t.cut}{contextMenu.paths.length > 1 ? ` (${contextMenu.paths.length})` : ''} <span class="shortcut">Ctrl+X</span>
       </button>
       {#if clipboard}
         <button on:click={() => { doPaste(); closeContextMenu() }}>
@@ -517,22 +916,43 @@
       <button on:click={() => { startCreateFolder(); closeContextMenu() }}>
         {t.newFolder} <span class="shortcut">Ctrl+Shift+N</span>
       </button>
-      <hr />
-      <button on:click={() => { startRename(contextMenu.target.path); closeContextMenu() }}>
-        {t.rename} <span class="shortcut">F2</span>
+      <button on:click={() => { startCreateFile(); closeContextMenu() }}>
+        {t.newFile}
       </button>
-      <button class="danger" on:click={() => { doDelete(contextMenu.target.path); closeContextMenu() }}>
-        {t.delete} <span class="shortcut">Del</span>
+      <hr />
+      {#if contextMenu.paths.length === 1}
+        <button on:click={() => { doAddFavorite(contextMenu.target.path); closeContextMenu() }}>
+          {t.addFavorite}
+        </button>
+        <hr />
+        <button on:click={() => { startRename(contextMenu.target.path); closeContextMenu() }}>
+          {t.rename} <span class="shortcut">F2</span>
+        </button>
+      {/if}
+      <button class="danger" on:click={() => { doDelete(contextMenu.paths); closeContextMenu() }}>
+        {t.delete}{contextMenu.paths.length > 1 ? ` (${contextMenu.paths.length})` : ''} <span class="shortcut">Del</span>
       </button>
     {:else}
       {#if clipboard}
         <button on:click={() => { doPaste(); closeContextMenu() }}>
-          {t.paste} <span class="shortcut">Ctrl+V</span>
+          {t.paste}{clipboard.paths.length > 1 ? ` (${clipboard.paths.length})` : ''} <span class="shortcut">Ctrl+V</span>
         </button>
         <hr />
       {/if}
       <button on:click={() => { startCreateFolder(); closeContextMenu() }}>
         {t.newFolder} <span class="shortcut">Ctrl+Shift+N</span>
+      </button>
+      <button on:click={() => { startCreateFile(); closeContextMenu() }}>
+        {t.newFile}
+      </button>
+      <hr />
+      <button on:click={() => {
+        consoleCwd = currentPath
+        consoleVisible = true
+        consoleLabel = 'コンソール'
+        closeContextMenu()
+      }}>
+        {t.openConsole}
       </button>
     {/if}
   </div>
@@ -720,6 +1140,12 @@
     padding: 2px 0;
   }
 
+  .file-list-body.drop-over {
+    outline: 2px dashed #007acc;
+    outline-offset: -2px;
+    background: rgba(0, 122, 204, 0.08);
+  }
+
   .file-row {
     display: grid;
     grid-template-columns: 28px 1fr 90px 160px;
@@ -729,6 +1155,7 @@
     border-radius: 3px;
     margin: 0 2px;
     align-items: center;
+    min-height: 28px;
   }
 
   .file-row:hover { background: #2a2d2e; }
@@ -826,6 +1253,73 @@
     color: #858585;
     font-size: 11px;
     margin-left: 16px;
+  }
+
+  /* ── Search box ── */
+  .search-box {
+    display: flex;
+    align-items: center;
+    background: #3c3c3c;
+    border: 1px solid #555;
+    border-radius: 4px;
+    height: 26px;
+    padding: 0 6px;
+    gap: 4px;
+    min-width: 160px;
+    max-width: 240px;
+    flex-shrink: 0;
+    transition: border-color 0.15s;
+  }
+  .search-box.active, .search-box:focus-within { border-color: #007acc; }
+  .search-icon { color: #858585; font-size: 15px; user-select: none; }
+  .search-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #d4d4d4;
+    font-size: 12px;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-width: 0;
+  }
+  .search-input::placeholder { color: #666; }
+  .search-clear {
+    background: transparent;
+    border: none;
+    color: #858585;
+    cursor: pointer;
+    padding: 0;
+    font-size: 11px;
+    line-height: 1;
+    width: auto !important;
+    height: auto !important;
+  }
+  .search-clear:hover { color: #d4d4d4; }
+
+  .search-status {
+    padding: 20px 16px;
+    color: #858585;
+    font-size: 13px;
+  }
+
+  .search-result-name {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    gap: 1px;
+  }
+  .result-filename {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+  }
+  .result-dir {
+    font-size: 11px;
+    color: #6c6c6c;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* ── Scrollbar ── */

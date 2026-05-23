@@ -14,6 +14,8 @@ export function GetHomeDir():Promise<string>;
 
 export function GetParentDir(arg1:string):Promise<string>;
 
+export function GetPreview(arg1:string):Promise<string>;
+
 export function GetThumbnail(arg1:string):Promise<string>;
 
 export function ListDirectory(arg1:string):Promise<Array<main.FileEntry>>;

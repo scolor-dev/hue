@@ -2,7 +2,7 @@
   import { onMount } from 'svelte'
   import { ListDirectory, GetHomeDir, GetDrives, GetParentDir, OpenFile,
            DeleteItem, RenameItem, CreateFolder, CopyItem, MoveItem,
-           GetThumbnail } from '../wailsjs/go/main/App'
+           GetThumbnail, GetPreview } from '../wailsjs/go/main/App'
   import { EventsOn } from '../wailsjs/runtime/runtime'
 
   let currentPath = ''
@@ -27,9 +27,34 @@
   // クリップボード
   let clipboard = null // { path, op: 'copy' | 'cut' }
 
-  // サムネイル
+  // サムネイル / プレビュー
   let thumbnailSrc = ''
+  let preview = null // { isText, content, truncated, fileSize }
   const IMG_EXTS = new Set(['.jpg','.jpeg','.png','.gif','.webp','.bmp','.tiff','.ico'])
+
+  // プレビューパネル リサイズ
+  let previewWidth = 220
+  let resizing = false
+
+  function onResizerMousedown(e) {
+    resizing = true
+    document.body.classList.add('resizing')
+    e.preventDefault()
+  }
+
+  function onMousemove(e) {
+    if (!resizing) return
+    const contentArea = document.querySelector('.content-area')
+    if (!contentArea) return
+    const rect = contentArea.getBoundingClientRect()
+    previewWidth = Math.max(160, Math.min(600, rect.right - e.clientX))
+  }
+
+  function onMouseup() {
+    if (!resizing) return
+    resizing = false
+    document.body.classList.remove('resizing')
+  }
 
   onMount(async () => {
     drives = await GetDrives()
@@ -59,9 +84,14 @@
   async function selectEntry(path) {
     selectedPath = path
     thumbnailSrc = ''
+    preview = null
     const entry = entries.find(e => e.path === path)
-    if (entry && !entry.isDir && IMG_EXTS.has(entry.ext)) {
+    if (!entry || entry.isDir) return
+    if (IMG_EXTS.has(entry.ext)) {
       thumbnailSrc = await GetThumbnail(path)
+    } else {
+      const raw = await GetPreview(path)
+      if (raw) preview = JSON.parse(raw)
     }
   }
 
@@ -237,7 +267,7 @@
   }
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window on:keydown={handleKeydown} on:mousemove={onMousemove} on:mouseup={onMouseup} />
 
 <main>
   <div class="toolbar">
@@ -262,6 +292,7 @@
     <div class="error" on:click={() => (error = '')}>{error} &nbsp;✕</div>
   {/if}
 
+  <div class="content-area">
   <div class="file-list" on:contextmenu={(e) => openContextMenu(e, null)}>
     <div class="file-list-header">
       <span class="col-icon"></span>
@@ -327,10 +358,32 @@
     </div>
   </div>
 
+  {#if selectedPath && (thumbnailSrc || preview)}
+    {#each [entries.find(e => e.path === selectedPath)] as entry}
+    <div class="resizer" on:mousedown={onResizerMousedown} on:keydown={() => {}} class:resizing role="separator" aria-orientation="vertical"></div>
+    <div class="preview-pane" style="width:{previewWidth}px">
+      {#if entry}
+        <div class="preview-name" title={entry.name}>{entry.name}</div>
+        <div class="preview-meta">{formatSize(entry.size, entry.isDir)} &nbsp;·&nbsp; {entry.modTime}</div>
+      {/if}
+      {#if thumbnailSrc}
+        <div class="preview-thumb">
+          <img src={thumbnailSrc} alt="preview" />
+        </div>
+      {:else if preview}
+        {#if preview.isText}
+          <pre class="preview-text">{preview.content}{#if preview.truncated}<span class="preview-trunc">…(省略)</span>{/if}</pre>
+        {:else}
+          <pre class="preview-hex">{preview.content}</pre>
+        {/if}
+      {/if}
+    </div>
+    {/each}
+  {/if}
+
+  </div>
+
   <div class="statusbar">
-    {#if thumbnailSrc}
-      <img class="thumb-preview" src={thumbnailSrc} alt="preview" />
-    {/if}
     {entries.length} 件
     {#if selectedPath}
       &nbsp;・&nbsp;{entries.find(e => e.path === selectedPath)?.name} を選択中
@@ -393,6 +446,8 @@
     padding: 0;
     overflow: hidden;
   }
+
+  :global(body.resizing) { user-select: none; cursor: col-resize; }
 
   main {
     display: flex;
@@ -462,12 +517,90 @@
     border-color: #007acc;
   }
 
+  /* ── Content area ── */
+  .content-area {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+    overflow: hidden;
+  }
+
   /* ── File list ── */
   .file-list {
     flex: 1;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+  }
+
+  /* ── Resizer ── */
+  .resizer {
+    width: 4px;
+    flex-shrink: 0;
+    background: #3c3c3c;
+    cursor: col-resize;
+    transition: background 0.15s;
+  }
+  .resizer:hover, .resizer.resizing { background: #007acc; }
+
+  /* ── Preview pane ── */
+  .preview-pane {
+    flex-shrink: 0;
+    background: #252526;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 10px 10px 0;
+    min-width: 0;
+  }
+
+  .preview-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: #d4d4d4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-bottom: 2px;
+  }
+
+  .preview-meta {
+    font-size: 11px;
+    color: #858585;
+    margin-bottom: 8px;
+  }
+
+  .preview-thumb {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 8px;
+  }
+
+  .preview-thumb img {
+    max-width: 100%;
+    max-height: 140px;
+    object-fit: contain;
+    border-radius: 3px;
+    border: 1px solid #3c3c3c;
+  }
+
+  .preview-text, .preview-hex {
+    flex: 1;
+    overflow-y: auto;
+    font-family: 'Consolas', monospace;
+    font-size: 11px;
+    color: #ce9178;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .preview-hex { color: #4ec9b0; }
+
+  .preview-trunc {
+    color: #858585;
+    font-style: italic;
   }
 
   .file-list-header {
@@ -542,14 +675,6 @@
     background: #007acc;
     color: white;
     font-size: 12px;
-    flex-shrink: 0;
-  }
-
-  .thumb-preview {
-    height: 20px;
-    width: 20px;
-    object-fit: cover;
-    border-radius: 2px;
     flex-shrink: 0;
   }
 

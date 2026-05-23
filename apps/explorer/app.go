@@ -24,6 +24,7 @@ func (a *App) startup(ctx context.Context) {
 	initZigFS()
 	initZigWatcher()
 	initZigThumb()
+	initZigPreview()
 }
 
 type FileEntry struct {

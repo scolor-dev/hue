@@ -45,4 +45,16 @@ pub fn build(b: *std.Build) void {
     thumb_mod.linkSystemLibrary("Ole32", .{});
 
     b.installArtifact(thumb_lib);
+
+    const preview_lib = b.addLibrary(.{
+        .name = "hue_preview",
+        .linkage = .dynamic,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("core/preview/src/preview.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+
+    b.installArtifact(preview_lib);
 }

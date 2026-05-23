@@ -26,6 +26,10 @@ export function GetParentDir(arg1) {
   return window['go']['main']['App']['GetParentDir'](arg1);
 }
 
+export function GetPreview(arg1) {
+  return window['go']['main']['App']['GetPreview'](arg1);
+}
+
 export function GetThumbnail(arg1) {
   return window['go']['main']['App']['GetThumbnail'](arg1);
 }

@@ -4,6 +4,7 @@
            DeleteItem, RenameItem, CreateFolder, CopyItem, MoveItem,
            GetThumbnail, GetPreview, OpenSettings, GetSettings } from '../wailsjs/go/main/App'
   import { EventsOn } from '../wailsjs/runtime/runtime'
+  import TreeSidebar from './TreeSidebar.svelte'
 
   let currentPath = ''
   let entries = []
@@ -35,6 +36,7 @@
   // 翻訳
   const tr = {
     ja: {
+      sidebarLabel: 'フォルダ',
       back: '戻る', forward: '進む', up: '上へ', refresh: '更新', settingsBtn: '設定',
       colName: '名前', colSize: 'サイズ', colDate: '更新日時',
       openFolder: 'フォルダを開く', open: '開く',
@@ -51,6 +53,7 @@
       relDay: (n) => `${n}日前`, relMo: (n) => `${n}ヶ月前`, relYr: (n) => `${n}年前`,
     },
     en: {
+      sidebarLabel: 'Folders',
       back: 'Back', forward: 'Forward', up: 'Up', refresh: 'Refresh', settingsBtn: 'Settings',
       colName: 'Name', colSize: 'Size', colDate: 'Modified',
       openFolder: 'Open Folder', open: 'Open',
@@ -393,6 +396,13 @@
   {/if}
 
   <div class="content-area">
+  <TreeSidebar
+    {drives}
+    {currentPath}
+    onNavigate={navigate}
+    label={t.sidebarLabel}
+  />
+
   <div class="file-list" on:contextmenu={(e) => openContextMenu(e, null)}>
     <div class="file-list-header">
       <span class="col-icon"></span>

@@ -2,7 +2,7 @@
   import { onMount } from 'svelte'
   import { ListDirectory, GetHomeDir, GetDrives, GetParentDir, OpenFile,
            DeleteItem, RenameItem, CreateFolder, CopyItem, MoveItem,
-           GetThumbnail, GetPreview } from '../wailsjs/go/main/App'
+           GetThumbnail, GetPreview, OpenSettings, GetSettings } from '../wailsjs/go/main/App'
   import { EventsOn } from '../wailsjs/runtime/runtime'
 
   let currentPath = ''
@@ -32,6 +32,71 @@
   let preview = null // { isText, content, truncated, fileSize }
   const IMG_EXTS = new Set(['.jpg','.jpeg','.png','.gif','.webp','.bmp','.tiff','.ico'])
 
+  // 翻訳
+  const tr = {
+    ja: {
+      back: '戻る', forward: '進む', up: '上へ', refresh: '更新', settingsBtn: '設定',
+      colName: '名前', colSize: 'サイズ', colDate: '更新日時',
+      openFolder: 'フォルダを開く', open: '開く',
+      copy: 'コピー', cut: '切り取り', paste: '貼り付け',
+      newFolder: '新規フォルダー', rename: '名前の変更', delete: '削除',
+      countItems: (n) => `${n} 件`,
+      selectedLabel: (name) => `${name} を選択中`,
+      clipboardLabel: (op) => `クリップボード: ${op === 'copy' ? 'コピー' : '切り取り'}`,
+      confirmDelete: (name) => `「${name}」を削除しますか？`,
+      defaultFolderName: '新しいフォルダー',
+      truncated: '省略',
+      relNow: 'たった今',
+      relMin: (n) => `${n}分前`, relHr: (n) => `${n}時間前`,
+      relDay: (n) => `${n}日前`, relMo: (n) => `${n}ヶ月前`, relYr: (n) => `${n}年前`,
+    },
+    en: {
+      back: 'Back', forward: 'Forward', up: 'Up', refresh: 'Refresh', settingsBtn: 'Settings',
+      colName: 'Name', colSize: 'Size', colDate: 'Modified',
+      openFolder: 'Open Folder', open: 'Open',
+      copy: 'Copy', cut: 'Cut', paste: 'Paste',
+      newFolder: 'New Folder', rename: 'Rename', delete: 'Delete',
+      countItems: (n) => `${n} item${n !== 1 ? 's' : ''}`,
+      selectedLabel: (name) => `${name} selected`,
+      clipboardLabel: (op) => `Clipboard: ${op === 'copy' ? 'Copy' : 'Cut'}`,
+      confirmDelete: (name) => `Delete "${name}"?`,
+      defaultFolderName: 'New Folder',
+      truncated: 'truncated',
+      relNow: 'just now',
+      relMin: (n) => `${n}m ago`, relHr: (n) => `${n}h ago`,
+      relDay: (n) => `${n}d ago`, relMo: (n) => `${n}mo ago`, relYr: (n) => `${n}y ago`,
+    },
+  }
+  $: t = tr[settings.language] ?? tr.ja
+
+  // 設定
+  let settings = {
+    showHidden: false,
+    dateFormat: 'datetime',
+    previewWidth: 220,
+    thumbSize: 128,
+    language: 'ja',
+    sortBy: 'name',
+    sortAsc: true,
+    showExtensions: true,
+    confirmDelete: true,
+  }
+
+  // 設定適用: フィルタ + ソート
+  $: visibleEntries = (() => {
+    let list = settings.showHidden ? entries : entries.filter(e => !e.isHidden)
+    const { sortBy, sortAsc } = settings
+    list = [...list].sort((a, b) => {
+      if (a.isDir !== b.isDir) return a.isDir ? -1 : 1
+      let cmp = 0
+      if (sortBy === 'size')       cmp = a.size - b.size
+      else if (sortBy === 'date')  cmp = a.modTime.localeCompare(b.modTime)
+      else                         cmp = a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+      return sortAsc ? cmp : -cmp
+    })
+    return list
+  })()
+
   // プレビューパネル リサイズ
   let previewWidth = 220
   let resizing = false
@@ -56,12 +121,24 @@
     document.body.classList.remove('resizing')
   }
 
+  async function applySettings(s) {
+    settings = s
+    previewWidth = s.previewWidth
+  }
+
   onMount(async () => {
+    const s = await GetSettings()
+    await applySettings(s)
     drives = await GetDrives()
     const home = await GetHomeDir()
     await navigate(home)
     window.addEventListener('click', closeContextMenu)
     EventsOn('fs:changed', () => refresh())
+    EventsOn('settings:changed', async () => {
+      const updated = await GetSettings()
+      await applySettings(updated)
+      await refresh()
+    })
   })
 
   async function navigate(path) {
@@ -169,7 +246,7 @@
   // ── 削除 ──
   async function doDelete(path) {
     const name = entries.find(e => e.path === path)?.name ?? path
-    if (!confirm(`「${name}」を削除しますか？`)) return
+    if (settings.confirmDelete && !confirm(t.confirmDelete(name))) return
     try {
       await DeleteItem(path)
       if (selectedPath === path) selectedPath = ''
@@ -199,7 +276,7 @@
   // ── 新規フォルダ ──
   function startCreateFolder() {
     creatingFolder = true
-    newFolderName = '新しいフォルダー'
+    newFolderName = t.defaultFolderName
     setTimeout(() => {
       const el = document.getElementById('new-folder-input')
       el?.focus(); el?.select()
@@ -241,6 +318,28 @@
   }
 
   // ── ユーティリティ ──
+  function displayName(entry) {
+    if (settings.showExtensions || entry.isDir || !entry.ext) return entry.name
+    return entry.name.slice(0, entry.name.length - entry.ext.length)
+  }
+
+  function formatDate(modTime) {
+    if (settings.dateFormat === 'datetime') return modTime
+    if (settings.dateFormat === 'date') return modTime.slice(0, 10)
+    const diff = Date.now() - new Date(modTime.replace(' ', 'T')).getTime()
+    const sec = Math.floor(diff / 1000)
+    if (sec < 60)   return t.relNow
+    const min = Math.floor(sec / 60)
+    if (min < 60)   return t.relMin(min)
+    const hr = Math.floor(min / 60)
+    if (hr < 24)    return t.relHr(hr)
+    const day = Math.floor(hr / 24)
+    if (day < 30)   return t.relDay(day)
+    const mo = Math.floor(day / 30)
+    if (mo < 12)    return t.relMo(mo)
+    return t.relYr(Math.floor(mo / 12))
+  }
+
   function formatSize(bytes, isDir) {
     if (isDir) return '—'
     if (bytes < 1024) return bytes + ' B'
@@ -271,10 +370,10 @@
 
 <main>
   <div class="toolbar">
-    <button on:click={goBack} disabled={historyIndex <= 0} title="戻る (Alt+←)">&#8592;</button>
-    <button on:click={goForward} disabled={historyIndex >= history.length - 1} title="進む (Alt+→)">&#8594;</button>
-    <button on:click={goUp} title="上へ">&#8593;</button>
-    <button on:click={refresh} title="更新 (F5)">&#8635;</button>
+    <button on:click={goBack} disabled={historyIndex <= 0} title={t.back}>&#8592;</button>
+    <button on:click={goForward} disabled={historyIndex >= history.length - 1} title={t.forward}>&#8594;</button>
+    <button on:click={goUp} title={t.up}>&#8593;</button>
+    <button on:click={refresh} title={t.refresh}>&#8635;</button>
     <div class="drives">
       {#each drives as drive}
         <button class="drive-btn" on:click={() => navigate(drive)}>{drive}</button>
@@ -286,6 +385,7 @@
       on:keydown={handleAddressKeydown}
       spellcheck="false"
     />
+    <button on:click={OpenSettings} title={t.settingsBtn}>&#9881;</button>
   </div>
 
   {#if error}
@@ -296,12 +396,12 @@
   <div class="file-list" on:contextmenu={(e) => openContextMenu(e, null)}>
     <div class="file-list-header">
       <span class="col-icon"></span>
-      <span class="col-name">名前</span>
-      <span class="col-size">サイズ</span>
-      <span class="col-modified">更新日時</span>
+      <span class="col-name">{t.colName}</span>
+      <span class="col-size">{t.colSize}</span>
+      <span class="col-modified">{t.colDate}</span>
     </div>
     <div class="file-list-body">
-      {#each entries as entry (entry.path)}
+      {#each visibleEntries as entry (entry.path)}
         <div
           class="file-row"
           class:selected={selectedPath === entry.path}
@@ -329,11 +429,11 @@
                 on:click={(e) => e.stopPropagation()}
               />
             {:else}
-              {entry.name}
+              {displayName(entry)}
             {/if}
           </span>
           <span class="col-size">{formatSize(entry.size, entry.isDir)}</span>
-          <span class="col-modified">{entry.modTime}</span>
+          <span class="col-modified">{formatDate(entry.modTime)}</span>
         </div>
       {/each}
 
@@ -372,7 +472,7 @@
         </div>
       {:else if preview}
         {#if preview.isText}
-          <pre class="preview-text">{preview.content}{#if preview.truncated}<span class="preview-trunc">…(省略)</span>{/if}</pre>
+          <pre class="preview-text">{preview.content}{#if preview.truncated}<span class="preview-trunc">…({t.truncated})</span>{/if}</pre>
         {:else}
           <pre class="preview-hex">{preview.content}</pre>
         {/if}
@@ -384,12 +484,12 @@
   </div>
 
   <div class="statusbar">
-    {entries.length} 件
+    {t.countItems(visibleEntries.length)}
     {#if selectedPath}
-      &nbsp;・&nbsp;{entries.find(e => e.path === selectedPath)?.name} を選択中
+      &nbsp;·&nbsp;{t.selectedLabel(entries.find(e => e.path === selectedPath)?.name ?? '')}
     {/if}
     {#if clipboard}
-      &nbsp;・&nbsp;クリップボード: {clipboard.op === 'copy' ? 'コピー' : '切り取り'}
+      &nbsp;·&nbsp;{t.clipboardLabel(clipboard.op)}
     {/if}
   </div>
 </main>
@@ -399,41 +499,40 @@
     {#if contextMenu.target}
       <!-- ファイル / フォルダ上 -->
       <button on:click={() => { onEnter(contextMenu.target); closeContextMenu() }}>
-        {contextMenu.target.isDir ? 'フォルダを開く' : '開く'}
+        {contextMenu.target.isDir ? t.openFolder : t.open}
       </button>
       <hr />
       <button on:click={() => { clipboard = { path: contextMenu.target.path, op: 'copy' }; closeContextMenu() }}>
-        コピー <span class="shortcut">Ctrl+C</span>
+        {t.copy} <span class="shortcut">Ctrl+C</span>
       </button>
       <button on:click={() => { clipboard = { path: contextMenu.target.path, op: 'cut' }; closeContextMenu() }}>
-        切り取り <span class="shortcut">Ctrl+X</span>
+        {t.cut} <span class="shortcut">Ctrl+X</span>
       </button>
       {#if clipboard}
         <button on:click={() => { doPaste(); closeContextMenu() }}>
-          貼り付け <span class="shortcut">Ctrl+V</span>
+          {t.paste} <span class="shortcut">Ctrl+V</span>
         </button>
       {/if}
       <hr />
       <button on:click={() => { startCreateFolder(); closeContextMenu() }}>
-        新規フォルダー <span class="shortcut">Ctrl+Shift+N</span>
+        {t.newFolder} <span class="shortcut">Ctrl+Shift+N</span>
       </button>
       <hr />
       <button on:click={() => { startRename(contextMenu.target.path); closeContextMenu() }}>
-        名前の変更 <span class="shortcut">F2</span>
+        {t.rename} <span class="shortcut">F2</span>
       </button>
       <button class="danger" on:click={() => { doDelete(contextMenu.target.path); closeContextMenu() }}>
-        削除 <span class="shortcut">Del</span>
+        {t.delete} <span class="shortcut">Del</span>
       </button>
     {:else}
-      <!-- 何もない箇所 -->
       {#if clipboard}
         <button on:click={() => { doPaste(); closeContextMenu() }}>
-          貼り付け <span class="shortcut">Ctrl+V</span>
+          {t.paste} <span class="shortcut">Ctrl+V</span>
         </button>
         <hr />
       {/if}
       <button on:click={() => { startCreateFolder(); closeContextMenu() }}>
-        新規フォルダー <span class="shortcut">Ctrl+Shift+N</span>
+        {t.newFolder} <span class="shortcut">Ctrl+Shift+N</span>
       </button>
     {/if}
   </div>

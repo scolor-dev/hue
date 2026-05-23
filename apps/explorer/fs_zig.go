@@ -71,13 +71,15 @@ func (z *zigFSLib) listDirectory(path string) ([]FileEntry, error) {
 
 	entries := make([]FileEntry, len(zigEntries))
 	for i, ze := range zigEntries {
+		p := filepath.Join(path, ze.Name)
 		entries[i] = FileEntry{
-			Name:    ze.Name,
-			Path:    filepath.Join(path, ze.Name),
-			IsDir:   ze.IsDir,
-			Size:    ze.Size,
-			ModTime: ze.ModTime,
-			Ext:     ze.Ext,
+			Name:     ze.Name,
+			Path:     p,
+			IsDir:    ze.IsDir,
+			IsHidden: isHiddenWindows(p),
+			Size:     ze.Size,
+			ModTime:  ze.ModTime,
+			Ext:      ze.Ext,
 		}
 	}
 	return entries, nil

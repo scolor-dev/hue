@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -106,11 +107,111 @@ func (a *App) subscribeSettingsEvents() {
 }
 
 func (a *App) OpenSettings() {
-	exec.Command("cmd", "/c", "start", "http://localhost:5200").Start()
+	exec.Command("cmd", "/c", "start", "http://localhost:9271").Start()
 }
 
 func (a *App) GetStartupPath() string {
 	return startupPath
+}
+
+func (a *App) RunCommandShortcut(id string, currentPath string, extraInput string) error {
+	s := fetchSettings()
+	var sc *CommandShortcut
+	for i := range s.CommandShortcuts {
+		if s.CommandShortcuts[i].ID == id {
+			sc = &s.CommandShortcuts[i]
+			break
+		}
+	}
+	if sc == nil {
+		return fmt.Errorf("shortcut not found: %s", id)
+	}
+
+	workDir := currentPath
+	if sc.ExecutionMode == "fixed" && sc.FixedPath != "" {
+		workDir = sc.FixedPath
+	}
+
+	command := sc.Command
+	if sc.PromptEnabled && extraInput != "" {
+		if strings.Contains(command, "{input}") {
+			command = strings.ReplaceAll(command, "{input}", extraInput)
+		} else {
+			command = strings.TrimSpace(command) + " " + extraInput
+		}
+	}
+
+	go a.runCommandInConsole(sc.Label, workDir, command)
+	return nil
+}
+
+// ExecInConsole はインタラクティブコンソールからコマンドを実行する（コンソールをクリアしない）
+func (a *App) ExecInConsole(cwd, command string) {
+	go a.streamCommand(cwd, command, false)
+}
+
+func (a *App) runCommandInConsole(label, workDir, command string) {
+	// ショートカット実行: console:start でコンソールをクリアしてから実行
+	lines := strings.Split(strings.TrimSpace(command), "\n")
+	var parts []string
+	for _, line := range lines {
+		if l := strings.TrimSpace(line); l != "" {
+			parts = append(parts, l)
+		}
+	}
+	if len(parts) == 0 {
+		return
+	}
+	runtime.EventsEmit(a.ctx, "console:start", label)
+	a.streamCommand(workDir, strings.Join(parts, " && "), true)
+}
+
+func (a *App) streamCommand(workDir, command string, emitStart bool) {
+	emit := func(typ, text string) {
+		runtime.EventsEmit(a.ctx, "console:line", map[string]string{"type": typ, "text": text})
+	}
+
+	if command == "" {
+		return
+	}
+
+	if emitStart {
+		emit("system", fmt.Sprintf("> %s", command))
+	}
+
+	cmd := exec.Command("cmd", "/c", "chcp 65001 >nul 2>&1 && "+command)
+	cmd.Dir = workDir
+	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8")
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 0x08000000} // CREATE_NO_WINDOW
+
+	stdout, _ := cmd.StdoutPipe()
+	stderr, _ := cmd.StderrPipe()
+
+	if err := cmd.Start(); err != nil {
+		emit("stderr", "起動エラー: "+err.Error())
+		runtime.EventsEmit(a.ctx, "console:done", 1)
+		return
+	}
+
+	scan := func(r interface{ Scan() bool; Text() string }, typ string) {
+		for r.Scan() {
+			emit(typ, r.Text())
+		}
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() { defer wg.Done(); scan(bufio.NewScanner(stdout), "stdout") }()
+	go func() { defer wg.Done(); scan(bufio.NewScanner(stderr), "stderr") }()
+	wg.Wait()
+
+	exitCode := 0
+	if err := cmd.Wait(); err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		}
+	}
+	runtime.EventsEmit(a.ctx, "console:done", exitCode)
 }
 
 func (a *App) OpenInNewWindow(path string) {

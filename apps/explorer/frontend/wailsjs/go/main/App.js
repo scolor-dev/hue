@@ -18,6 +18,10 @@ export function DeleteItem(arg1) {
   return window['go']['main']['App']['DeleteItem'](arg1);
 }
 
+export function ExecInConsole(arg1, arg2) {
+  return window['go']['main']['App']['ExecInConsole'](arg1, arg2);
+}
+
 export function GetDrives() {
   return window['go']['main']['App']['GetDrives']();
 }
@@ -72,6 +76,10 @@ export function RemoveFavorite(arg1) {
 
 export function RenameItem(arg1, arg2) {
   return window['go']['main']['App']['RenameItem'](arg1, arg2);
+}
+
+export function RunCommandShortcut(arg1, arg2, arg3) {
+  return window['go']['main']['App']['RunCommandShortcut'](arg1, arg2, arg3);
 }
 
 export function SaveSettings(arg1) {

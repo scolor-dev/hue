@@ -4,9 +4,10 @@
            DeleteItem, RenameItem, CreateFolder, CopyItem, MoveItem,
            GetThumbnail, GetPreview, OpenSettings, GetSettings,
            AddFavorite, RemoveFavorite,
-           GetStartupPath, OpenInNewWindow } from '../wailsjs/go/main/App'
+           GetStartupPath, OpenInNewWindow, ExecInConsole } from '../wailsjs/go/main/App'
   import { EventsOn } from '../wailsjs/runtime/runtime'
   import TreeSidebar from './TreeSidebar.svelte'
+  import ConsolePane from './ConsolePane.svelte'
 
   let currentPath = ''
   let entries = []
@@ -39,12 +40,13 @@
   const tr = {
     ja: {
       sidebarLabel: 'フォルダ',
+      shortcutsLabel: 'ショートカット',
       favoritesLabel: 'お気に入り',
       addFavorite: 'お気に入りに追加',
       removeFavorite: 'お気に入りから削除',
       back: '戻る', forward: '進む', up: '上へ', refresh: '更新', settingsBtn: '設定',
       colName: '名前', colSize: 'サイズ', colDate: '更新日時',
-      openFolder: 'フォルダを開く', open: '開く', openNewWindow: '新しいウィンドウで開く',
+      openFolder: 'フォルダを開く', open: '開く', openNewWindow: '新しいウィンドウで開く', openConsole: 'コンソールで開く',
       copy: 'コピー', cut: '切り取り', paste: '貼り付け',
       newFolder: '新規フォルダー', rename: '名前の変更', delete: '削除',
       countItems: (n) => `${n} 件`,
@@ -59,12 +61,13 @@
     },
     en: {
       sidebarLabel: 'Folders',
+      shortcutsLabel: 'Shortcuts',
       favoritesLabel: 'Favorites',
       addFavorite: 'Add to Favorites',
       removeFavorite: 'Remove from Favorites',
       back: 'Back', forward: 'Forward', up: 'Up', refresh: 'Refresh', settingsBtn: 'Settings',
       colName: 'Name', colSize: 'Size', colDate: 'Modified',
-      openFolder: 'Open Folder', open: 'Open', openNewWindow: 'Open in New Window',
+      openFolder: 'Open Folder', open: 'Open', openNewWindow: 'Open in New Window', openConsole: 'Open in Console',
       copy: 'Copy', cut: 'Cut', paste: 'Paste',
       newFolder: 'New Folder', rename: 'Rename', delete: 'Delete',
       countItems: (n) => `${n} item${n !== 1 ? 's' : ''}`,
@@ -92,6 +95,7 @@
     showExtensions: true,
     confirmDelete: true,
     favorites: [],
+    commandShortcuts: [],
   }
 
   // 設定適用: フィルタ + ソート
@@ -108,6 +112,18 @@
     })
     return list
   })()
+
+  // コンソールパネル
+  let consoleVisible = false
+  let consoleRunning = false
+  let consoleLabel = ''
+  let consoleLines = []
+  let consoleSeq = 0
+  let consoleCwd = ''
+
+  function consolePush(type, text) {
+    consoleLines = [...consoleLines, { id: consoleSeq++, type, text }]
+  }
 
   // プレビューパネル リサイズ
   let previewWidth = 220
@@ -163,6 +179,25 @@
       const updated = await GetSettings()
       await applySettings(updated)
       await refresh()
+    })
+    EventsOn('console:start', (lbl) => {
+      consoleLabel = lbl
+      consoleLines = []
+      consoleSeq = 0
+      consoleRunning = true
+      consoleVisible = true
+      if (!consoleCwd) consoleCwd = currentPath
+    })
+    EventsOn('console:line', (msg) => {
+      consolePush(msg.type, msg.text)
+    })
+    EventsOn('console:done', (code) => {
+      consoleRunning = false
+      if (code === 0) {
+        consolePush('done-ok', `✓ 完了 (exit 0)`)
+      } else {
+        consolePush('done-err', `✗ 終了コード ${code}`)
+      }
     })
   })
 
@@ -427,6 +462,8 @@
     onRemoveFavorite={doRemoveFavorite}
     favoritesLabel={t.favoritesLabel}
     removeLabel={t.removeFavorite}
+    shortcuts={settings.commandShortcuts ?? []}
+    shortcutsLabel={t.shortcutsLabel}
   />
 
   <div class="file-list" on:contextmenu={(e) => openContextMenu(e, null)}>
@@ -519,6 +556,22 @@
 
   </div>
 
+  {#if consoleVisible}
+    <ConsolePane
+      lines={consoleLines}
+      running={consoleRunning}
+      label={consoleLabel}
+      cwd={consoleCwd}
+      onClose={() => { consoleVisible = false }}
+      onClear={() => { consoleLines = []; consoleSeq = 0 }}
+      onRun={(cmd) => {
+        consolePush('system', `> ${cmd}`)
+        consoleRunning = true
+        ExecInConsole(consoleCwd, cmd)
+      }}
+    />
+  {/if}
+
   <div class="statusbar">
     {t.countItems(visibleEntries.length)}
     {#if selectedPath}
@@ -540,6 +593,14 @@
       {#if contextMenu.target.isDir}
         <button on:click={() => { OpenInNewWindow(contextMenu.target.path); closeContextMenu() }}>
           {t.openNewWindow}
+        </button>
+        <button on:click={() => {
+          consoleCwd = contextMenu.target.path
+          consoleVisible = true
+          consoleLabel = 'コンソール'
+          closeContextMenu()
+        }}>
+          {t.openConsole}
         </button>
       {/if}
       <hr />
@@ -578,6 +639,15 @@
       {/if}
       <button on:click={() => { startCreateFolder(); closeContextMenu() }}>
         {t.newFolder} <span class="shortcut">Ctrl+Shift+N</span>
+      </button>
+      <hr />
+      <button on:click={() => {
+        consoleCwd = currentPath
+        consoleVisible = true
+        consoleLabel = 'コンソール'
+        closeContextMenu()
+      }}>
+        {t.openConsole}
       </button>
     {/if}
   </div>

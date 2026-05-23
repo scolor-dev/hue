@@ -8,6 +8,7 @@ import type { Lang } from './i18n'
 import GeneralSettings from './components/GeneralSettings.vue'
 import DisplaySettings from './components/DisplaySettings.vue'
 import PreviewSettings from './components/PreviewSettings.vue'
+import CommandShortcutsSettings from './components/CommandShortcutsSettings.vue'
 import AboutSection from './components/AboutSection.vue'
 
 const settings = ref({ ...defaultSettings })
@@ -27,10 +28,11 @@ async function onChange() {
 }
 
 const navSections: { id: SettingsSection; icon: string }[] = [
-  { id: 'general', icon: '⚙' },
-  { id: 'display', icon: '👁' },
-  { id: 'preview', icon: '🖼' },
-  { id: 'about',   icon: 'ℹ' },
+  { id: 'general',   icon: '⚙' },
+  { id: 'display',   icon: '👁' },
+  { id: 'preview',   icon: '🖼' },
+  { id: 'shortcuts', icon: '⚡' },
+  { id: 'about',     icon: 'ℹ' },
 ]
 </script>
 
@@ -67,6 +69,12 @@ const navSections: { id: SettingsSection; icon: string }[] = [
       />
       <PreviewSettings
         v-else-if="activeSection === 'preview'"
+        :settings="settings"
+        :lang="settings.language"
+        @change="onChange"
+      />
+      <CommandShortcutsSettings
+        v-else-if="activeSection === 'shortcuts'"
         :settings="settings"
         :lang="settings.language"
         @change="onChange"

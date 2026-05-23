@@ -12,31 +12,45 @@ import (
 	"sync"
 )
 
+type CommandShortcut struct {
+	ID                string `json:"id"`
+	Label             string `json:"label"`
+	Icon              string `json:"icon"`
+	Command           string `json:"command"`
+	ExecutionMode     string `json:"executionMode"` // "current" | "fixed"
+	FixedPath         string `json:"fixedPath"`
+	PromptEnabled     bool   `json:"promptEnabled"`
+	PromptMessage     string `json:"promptMessage"`
+	PromptPlaceholder string `json:"promptPlaceholder"`
+}
+
 type HueSettings struct {
-	ShowHidden     bool     `json:"showHidden"`
-	DateFormat     string   `json:"dateFormat"`
-	PreviewWidth   int      `json:"previewWidth"`
-	ThumbSize      int      `json:"thumbSize"`
-	Language       string   `json:"language"`
-	SortBy         string   `json:"sortBy"`
-	SortAsc        bool     `json:"sortAsc"`
-	ShowExtensions bool     `json:"showExtensions"`
-	ConfirmDelete  bool     `json:"confirmDelete"`
-	Favorites      []string `json:"favorites"`
+	ShowHidden       bool              `json:"showHidden"`
+	DateFormat       string            `json:"dateFormat"`
+	PreviewWidth     int               `json:"previewWidth"`
+	ThumbSize        int               `json:"thumbSize"`
+	Language         string            `json:"language"`
+	SortBy           string            `json:"sortBy"`
+	SortAsc          bool              `json:"sortAsc"`
+	ShowExtensions   bool              `json:"showExtensions"`
+	ConfirmDelete    bool              `json:"confirmDelete"`
+	Favorites        []string          `json:"favorites"`
+	CommandShortcuts []CommandShortcut `json:"commandShortcuts"`
 }
 
 func defaultHueSettings() HueSettings {
 	return HueSettings{
-		ShowHidden:     false,
-		DateFormat:     "datetime",
-		PreviewWidth:   220,
-		ThumbSize:      128,
-		Language:       "ja",
-		SortBy:         "name",
-		SortAsc:        true,
-		ShowExtensions: true,
-		ConfirmDelete:  true,
-		Favorites:      []string{},
+		ShowHidden:       false,
+		DateFormat:       "datetime",
+		PreviewWidth:     220,
+		ThumbSize:        128,
+		Language:         "ja",
+		SortBy:           "name",
+		SortAsc:          true,
+		ShowExtensions:   true,
+		ConfirmDelete:    true,
+		Favorites:        []string{},
+		CommandShortcuts: []CommandShortcut{},
 	}
 }
 
@@ -108,6 +122,35 @@ func broadcastSettingsChange() {
 	}
 }
 
+func findSettingsDistDir() string {
+	const relPath = "apps/settings/frontend/dist"
+
+	// CWD または実行ファイルから上位ディレクトリへ辿ってリポジトリルートを探す
+	anchors := []string{}
+	if cwd, err := os.Getwd(); err == nil {
+		anchors = append(anchors, cwd)
+	}
+	if exe, err := os.Executable(); err == nil {
+		anchors = append(anchors, filepath.Dir(exe))
+	}
+
+	for _, anchor := range anchors {
+		dir := anchor
+		for i := 0; i < 8; i++ {
+			candidate := filepath.Join(dir, relPath)
+			if info, err := os.Stat(filepath.Join(candidate, "index.html")); err == nil && !info.IsDir() {
+				return candidate
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
+	}
+	return ""
+}
+
 func startSettingsServer() {
 	ln, err := net.Listen("tcp", "127.0.0.1:9271")
 	if err != nil {
@@ -115,6 +158,24 @@ func startSettingsServer() {
 	}
 
 	mux := http.NewServeMux()
+
+	// 設定 UI (Vue SPA) を配信
+	if distDir := findSettingsDistDir(); distDir != "" {
+		fs := http.FileServer(http.Dir(distDir))
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasPrefix(r.URL.Path, "/api") {
+				http.NotFound(w, r)
+				return
+			}
+			// SPA: ファイルが存在しない場合は index.html を返す
+			target := filepath.Join(distDir, filepath.FromSlash(r.URL.Path))
+			if _, serr := os.Stat(target); os.IsNotExist(serr) {
+				http.ServeFile(w, r, filepath.Join(distDir, "index.html"))
+				return
+			}
+			fs.ServeHTTP(w, r)
+		})
+	}
 
 	mux.HandleFunc("/api/settings", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")

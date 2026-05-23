@@ -2,6 +2,7 @@
   import { onDestroy } from 'svelte'
   import TreeNode from './TreeNode.svelte'
   import FavoritesPane from './FavoritesPane.svelte'
+  import CommandShortcutsPane from './CommandShortcutsPane.svelte'
 
   export let drives = []
   export let currentPath = ''
@@ -11,6 +12,8 @@
   export let onRemoveFavorite = (_path) => {}
   export let favoritesLabel = 'お気に入り'
   export let removeLabel = 'お気に入りから削除'
+  export let shortcuts = []
+  export let shortcutsLabel = 'ショートカット'
 
   let sidebarWidth = 200
   let isResizing = false
@@ -43,6 +46,12 @@
 
 <div class="sidebar-wrapper">
   <div class="tree-sidebar" style="width: {sidebarWidth}px">
+    <CommandShortcutsPane
+      {shortcuts}
+      {currentPath}
+      label={shortcutsLabel}
+    />
+
     <FavoritesPane
       {favorites}
       {currentPath}

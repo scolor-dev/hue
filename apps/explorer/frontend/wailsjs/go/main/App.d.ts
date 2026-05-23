@@ -10,6 +10,8 @@ export function CreateFolder(arg1:string,arg2:string):Promise<void>;
 
 export function DeleteItem(arg1:string):Promise<void>;
 
+export function ExecInConsole(arg1:string,arg2:string):Promise<void>;
+
 export function GetDrives():Promise<Array<string>>;
 
 export function GetHomeDir():Promise<string>;
@@ -37,5 +39,7 @@ export function OpenSettings():Promise<void>;
 export function RemoveFavorite(arg1:string):Promise<void>;
 
 export function RenameItem(arg1:string,arg2:string):Promise<void>;
+
+export function RunCommandShortcut(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SaveSettings(arg1:main.HueSettings):Promise<void>;

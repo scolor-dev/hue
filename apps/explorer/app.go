@@ -21,6 +21,7 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	initZigFS()
 }
 
 type FileEntry struct {
@@ -52,6 +53,13 @@ func (a *App) GetDrives() []string {
 }
 
 func (a *App) ListDirectory(path string) ([]FileEntry, error) {
+	if zigFS != nil {
+		return zigFS.listDirectory(path)
+	}
+	return goListDirectory(path)
+}
+
+func goListDirectory(path string) ([]FileEntry, error) {
 	entries, err := os.ReadDir(path)
 	if err != nil {
 		return nil, err

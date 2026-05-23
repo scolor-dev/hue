@@ -32,6 +32,7 @@ func (a *App) startup(ctx context.Context) {
 	initZigWatcher()
 	initZigThumb()
 	initZigPreview()
+	initZigFileops()
 	a.subscribeSettingsEvents()
 }
 
@@ -334,6 +335,9 @@ func (a *App) OpenFile(path string) error {
 }
 
 func (a *App) DeleteItem(path string) error {
+	if zigFileops != nil {
+		return zigFileops.deleteItem(path)
+	}
 	return os.RemoveAll(path)
 }
 
@@ -353,7 +357,10 @@ func (a *App) CopyItem(src, dstDir string) error {
 	} else if _, err := os.Stat(dst); err == nil {
 		dst = uniqueCopyPath(dstDir, name)
 	}
-	return copyPath(src, dst)
+	if zigFileops != nil {
+		return zigFileops.copyItem(src, dst)
+	}
+	return goCopyPath(src, dst)
 }
 
 func uniqueCopyPath(dir, name string) string {
@@ -373,27 +380,30 @@ func uniqueCopyPath(dir, name string) string {
 
 func (a *App) MoveItem(src, dstDir string) error {
 	dst := filepath.Join(dstDir, filepath.Base(src))
+	if zigFileops != nil {
+		return zigFileops.moveItem(src, dst)
+	}
 	if err := os.Rename(src, dst); err == nil {
 		return nil
 	}
-	if err := copyPath(src, dst); err != nil {
+	if err := goCopyPath(src, dst); err != nil {
 		return err
 	}
 	return os.RemoveAll(src)
 }
 
-func copyPath(src, dst string) error {
+func goCopyPath(src, dst string) error {
 	info, err := os.Stat(src)
 	if err != nil {
 		return err
 	}
 	if info.IsDir() {
-		return copyDir(src, dst)
+		return goCopyDir(src, dst)
 	}
-	return copyFile(src, dst)
+	return goCopyFile(src, dst)
 }
 
-func copyFile(src, dst string) error {
+func goCopyFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
 		return err
@@ -424,7 +434,7 @@ func copyFile(src, dst string) error {
 	return nil
 }
 
-func copyDir(src, dst string) error {
+func goCopyDir(src, dst string) error {
 	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -434,6 +444,6 @@ func copyDir(src, dst string) error {
 		if info.IsDir() {
 			return os.MkdirAll(target, info.Mode())
 		}
-		return copyFile(path, target)
+		return goCopyFile(path, target)
 	})
 }

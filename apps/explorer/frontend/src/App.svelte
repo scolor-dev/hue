@@ -126,6 +126,29 @@
     return list
   })()
 
+  $: activeList = searchQuery ? searchResults : visibleEntries
+
+  function scrollRowIntoView(path) {
+    const el = [...document.querySelectorAll('[data-path]')].find(el => el.getAttribute('data-path') === path)
+    el?.scrollIntoView({ block: 'nearest' })
+  }
+
+  async function navigateList(entry, shift) {
+    if (shift) {
+      const next = new Set(selectedPaths)
+      next.add(entry.path)
+      selectedPaths = next
+      selectedPath = entry.path
+    } else if (searchQuery) {
+      selectedPaths = new Set([entry.path])
+      selectedPath = entry.path
+      lastClickedPath = entry.path
+    } else {
+      await selectEntry(entry.path)
+    }
+    scrollRowIntoView(entry.path)
+  }
+
   // 検索
   let searchQuery = ''
   let searchResults = []
@@ -306,7 +329,7 @@
       selectedPaths = next
       lastClickedPath = entry.path
     } else if (e.shiftKey && lastClickedPath) {
-      const paths = visibleEntries.map(e => e.path)
+      const paths = activeList.map(e => e.path)
       const a = paths.indexOf(lastClickedPath)
       const b = paths.indexOf(entry.path)
       if (a !== -1 && b !== -1) {
@@ -316,6 +339,10 @@
         selectedPaths = next
         selectedPath = entry.path
       }
+    } else if (searchQuery) {
+      selectedPaths = new Set([entry.path])
+      selectedPath = entry.path
+      lastClickedPath = entry.path
     } else {
       await selectEntry(entry.path)
     }
@@ -385,7 +412,29 @@
       return
     }
 
-    if (e.key === 'Delete' && selectedPaths.size > 0) {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      const idx = activeList.findIndex(e => e.path === selectedPath)
+      const next = e.key === 'ArrowDown'
+        ? (idx === -1 ? 0 : Math.min(idx + 1, activeList.length - 1))
+        : (idx === -1 ? activeList.length - 1 : Math.max(idx - 1, 0))
+      if (activeList[next]) await navigateList(activeList[next], e.shiftKey)
+    } else if (e.key === 'Home') {
+      e.preventDefault()
+      if (activeList[0]) await navigateList(activeList[0], e.shiftKey)
+    } else if (e.key === 'End') {
+      e.preventDefault()
+      const last = activeList.at(-1)
+      if (last) await navigateList(last, e.shiftKey)
+    } else if (e.key === 'Enter' && selectedPath && selectedPaths.size === 1) {
+      const entry = activeList.find(e => e.path === selectedPath)
+      if (entry) {
+        if (searchQuery) await openSearchResult(entry)
+        else await onEnter(entry)
+      }
+    } else if (e.key === 'Backspace' && !searchQuery) {
+      await goUp()
+    } else if (e.key === 'Delete' && selectedPaths.size > 0) {
       await doDelete([...selectedPaths])
     } else if (e.key === 'F2' && selectedPath && selectedPaths.size === 1) {
       startRename(selectedPath)
@@ -626,10 +675,10 @@
           {#each searchResults as entry (entry.path)}
             <div
               class="file-row"
-              class:selected={selectedPath === entry.path}
-              on:click={() => { selectedPath = entry.path }}
+              class:selected={selectedPaths.has(entry.path)}
+              data-path={entry.path}
+              on:click={(e) => handleRowClick(entry, e)}
               on:dblclick={() => openSearchResult(entry)}
-              on:keydown={(e) => e.key === 'Enter' && openSearchResult(entry)}
               on:contextmenu={(e) => { e.stopPropagation(); openContextMenu(e, entry) }}
               role="row"
               tabindex="0"
@@ -650,6 +699,7 @@
           class="file-row"
           class:selected={selectedPaths.has(entry.path)}
           class:cut={clipboard?.op === 'cut' && clipboard?.paths?.includes(entry.path)}
+          data-path={entry.path}
           on:click={(e) => handleRowClick(entry, e)}
           on:dblclick={() => onEnter(entry)}
           on:contextmenu={(e) => { e.stopPropagation(); openContextMenu(e, entry) }}

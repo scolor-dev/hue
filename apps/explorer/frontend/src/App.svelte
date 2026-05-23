@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte'
+  import { onMount, tick } from 'svelte'
   import { ListDirectory, GetHomeDir, GetDrives, GetParentDir, OpenFile,
            DeleteItem, RenameItem, CreateFolder, CopyItem, MoveItem,
            GetThumbnail, GetPreview, OpenSettings, GetSettings,
@@ -19,6 +19,7 @@
 
   // 右クリックメニュー
   let contextMenu = { visible: false, x: 0, y: 0, target: null }
+  let contextMenuEl = null
 
   // 名前変更
   let renamingPath = ''
@@ -367,10 +368,19 @@
   }
 
   // ── 右クリックメニュー ──
-  function openContextMenu(e, entry) {
+  async function openContextMenu(e, entry) {
     e.preventDefault()
     contextMenu = { visible: true, x: e.clientX, y: e.clientY, target: entry }
     if (entry) selectedPath = entry.path
+    // 描画後にメニューのサイズを計測して画面外にはみ出さないよう補正
+    await tick()
+    if (!contextMenuEl) return
+    const rect = contextMenuEl.getBoundingClientRect()
+    let x = contextMenu.x
+    let y = contextMenu.y
+    if (x + rect.width  > window.innerWidth)  x = window.innerWidth  - rect.width  - 4
+    if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 4
+    contextMenu = { ...contextMenu, x: Math.max(0, x), y: Math.max(0, y) }
   }
 
   function closeContextMenu() {
@@ -584,7 +594,7 @@
 </main>
 
 {#if contextMenu.visible}
-  <div class="context-menu" style="left:{contextMenu.x}px; top:{contextMenu.y}px">
+  <div class="context-menu" bind:this={contextMenuEl} style="left:{contextMenu.x}px; top:{contextMenu.y}px">
     {#if contextMenu.target}
       <!-- ファイル / フォルダ上 -->
       <button on:click={() => { onEnter(contextMenu.target); closeContextMenu() }}>

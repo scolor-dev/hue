@@ -7,7 +7,7 @@
 | 🟡 | JavaScript | Plugins / scripting         | 14% |
 | 🟢 | Vue        | Settings / dashboard        | 13% |
 | ☁️ | Go         | CLI / tooling / API         | 12% |
-| 🔵 | Python     | AI / tests / automation     | 11% |
+| 🔵 | TypeScript | Frontend services / types   | 11% |
 | 🟣 | Elixir     | Realtime collaboration      | 10% |
 | ⬜ | その他      | config / shell 等            |  5% |
 
@@ -21,7 +21,7 @@ Zig → 性能
 JavaScript → 拡張性
 Vue → 構造化UI
 Go → 実務基盤
-Python → 知能
+TypeScript → 型安全
 Elixir → リアルタイム
 ```
 
@@ -53,12 +53,11 @@ hue/
 │   ├── operations/             # ☁️ Go - ファイル操作（コピー・移動・削除）
 │   └── cli/                    # ☁️ Go - CLI
 │
-├── ai/                         # 🔵 Python
-│   ├── search/                 # セマンティック検索
-│   ├── tagging/                # 自動タグ付け
-│   ├── summary/                # ファイル内容要約
-│   ├── organizer/              # 整理提案
-│   └── embeddings/             # ファイルエンベディング
+├── types/                      # 🔵 TypeScript
+│   ├── file.ts                 # ファイルエントリ型定義
+│   ├── plugin.ts               # プラグインインターフェース
+│   ├── events.ts               # イベント型
+│   └── settings.ts             # 設定型
 │
 ├── plugins/                    # 🟡 JavaScript
 │   ├── context-menu/           # 右クリックメニュー拡張
@@ -70,14 +69,14 @@ hue/
 │   ├── ui/                     # 🔴 Svelte
 │   ├── core/                   # 🟠 Zig
 │   ├── services/               # ☁️ Go
-│   ├── ai/                     # 🔵 Python
+│   ├── types/                  # 🔵 TypeScript
 │   ├── plugins/                # 🟡 JavaScript
 │   └── sync/                   # 🟣 Elixir
 │
 ├── examples/
 │   ├── plugins/                # 🟡 JavaScript
 │   ├── themes/                 # 🔴 Svelte
-│   └── ai-tools/               # 🔵 Python
+│   └── plugins/                # 🟡 JavaScript
 │
 ├── scripts/
 │   ├── build/                  # ☁️ Go
@@ -105,7 +104,7 @@ hue/
 | JavaScript | plugins / examples   |
 | Vue        | settings限定           |
 | Go         | tooling / CLI        |
-| Python     | AI / tests           |
+| TypeScript | frontend types       |
 | Elixir     | collaboration限定      |
 
 ---
@@ -162,10 +161,10 @@ hue/
 
 ---
 
-## 🔵 Python
+## 🔵 TypeScript
 
 ```txt
-「AIと自動化」
+「型で守る場所」
 ```
 
 担当。

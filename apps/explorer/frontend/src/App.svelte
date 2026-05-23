@@ -13,7 +13,9 @@
   let entries = []
   let history = []
   let historyIndex = -1
-  let selectedPath = ''
+  let selectedPaths = new Set()   // マルチセレクト
+  let selectedPath = ''           // フォーカス中アイテム（プレビュー用）
+  let lastClickedPath = ''        // Shift+クリックの起点
   let error = ''
   let drives = [] // DriveInfo[]
 
@@ -56,7 +58,8 @@
       newFolder: '新規フォルダー', rename: '名前の変更', delete: '削除',
       countItems: (n) => `${n} 件`,
       selectedLabel: (name) => `${name} を選択中`,
-      clipboardLabel: (op) => `クリップボード: ${op === 'copy' ? 'コピー' : '切り取り'}`,
+      selectedMultiLabel: (n) => `${n} 件選択中`,
+      clipboardLabel: (op, n) => `クリップボード: ${op === 'copy' ? 'コピー' : '切り取り'}${n > 1 ? ` (${n} 件)` : ''}`,
       confirmDelete: (name) => `「${name}」を削除しますか？`,
       defaultFolderName: '新しいフォルダー',
       truncated: '省略',
@@ -81,7 +84,8 @@
       newFolder: 'New Folder', rename: 'Rename', delete: 'Delete',
       countItems: (n) => `${n} item${n !== 1 ? 's' : ''}`,
       selectedLabel: (name) => `${name} selected`,
-      clipboardLabel: (op) => `Clipboard: ${op === 'copy' ? 'Copy' : 'Cut'}`,
+      selectedMultiLabel: (n) => `${n} items selected`,
+      clipboardLabel: (op, n) => `Clipboard: ${op === 'copy' ? 'Copy' : 'Cut'}${n > 1 ? ` (${n})` : ''}`,
       confirmDelete: (name) => `Delete "${name}"?`,
       defaultFolderName: 'New Folder',
       truncated: 'truncated',
@@ -265,7 +269,9 @@
       }
       history = [...history, path]
       historyIndex = history.length - 1
+      selectedPaths = new Set()
       selectedPath = ''
+      lastClickedPath = ''
     } catch (e) {
       error = String(e)
     }
@@ -273,6 +279,8 @@
 
   async function selectEntry(path) {
     selectedPath = path
+    selectedPaths = new Set([path])
+    lastClickedPath = path
     thumbnailSrc = ''
     preview = null
     const entry = entries.find(e => e.path === path)
@@ -285,10 +293,41 @@
     }
   }
 
+  async function handleRowClick(entry, e) {
+    if (e.ctrlKey) {
+      const next = new Set(selectedPaths)
+      if (next.has(entry.path)) {
+        next.delete(entry.path)
+        if (selectedPath === entry.path) selectedPath = [...next][0] ?? ''
+      } else {
+        next.add(entry.path)
+        selectedPath = entry.path
+      }
+      selectedPaths = next
+      lastClickedPath = entry.path
+    } else if (e.shiftKey && lastClickedPath) {
+      const paths = visibleEntries.map(e => e.path)
+      const a = paths.indexOf(lastClickedPath)
+      const b = paths.indexOf(entry.path)
+      if (a !== -1 && b !== -1) {
+        const [lo, hi] = a <= b ? [a, b] : [b, a]
+        const next = new Set(selectedPaths)
+        for (let i = lo; i <= hi; i++) next.add(paths[i])
+        selectedPaths = next
+        selectedPath = entry.path
+      }
+    } else {
+      await selectEntry(entry.path)
+    }
+  }
+
   async function refresh() {
     if (!currentPath) return
     try {
       entries = (await ListDirectory(currentPath)) ?? []
+      const existingPaths = new Set(entries.map(e => e.path))
+      selectedPaths = new Set([...selectedPaths].filter(p => existingPaths.has(p)))
+      if (!existingPaths.has(selectedPath)) selectedPath = ''
       error = ''
     } catch (e) { error = String(e) }
   }
@@ -346,16 +385,20 @@
       return
     }
 
-    if (e.key === 'Delete' && selectedPath) {
-      await doDelete(selectedPath)
-    } else if (e.key === 'F2' && selectedPath) {
+    if (e.key === 'Delete' && selectedPaths.size > 0) {
+      await doDelete([...selectedPaths])
+    } else if (e.key === 'F2' && selectedPath && selectedPaths.size === 1) {
       startRename(selectedPath)
     } else if (e.key === 'F5') {
       await refresh()
-    } else if (e.ctrlKey && e.key === 'c' && selectedPath) {
-      clipboard = { path: selectedPath, op: 'copy' }
-    } else if (e.ctrlKey && e.key === 'x' && selectedPath) {
-      clipboard = { path: selectedPath, op: 'cut' }
+    } else if (e.ctrlKey && e.key === 'a') {
+      e.preventDefault()
+      selectedPaths = new Set(visibleEntries.map(e => e.path))
+      selectedPath = visibleEntries.at(-1)?.path ?? ''
+    } else if (e.ctrlKey && e.key === 'c' && selectedPaths.size > 0) {
+      clipboard = { paths: [...selectedPaths], op: 'copy' }
+    } else if (e.ctrlKey && e.key === 'x' && selectedPaths.size > 0) {
+      clipboard = { paths: [...selectedPaths], op: 'cut' }
     } else if (e.ctrlKey && e.key === 'v' && clipboard) {
       await doPaste()
     } else if (e.ctrlKey && e.shiftKey && e.key === 'N') {
@@ -367,12 +410,16 @@
   }
 
   // ── 削除 ──
-  async function doDelete(path) {
-    const name = entries.find(e => e.path === path)?.name ?? path
+  async function doDelete(paths) {
+    const count = paths.length
+    const name = count === 1
+      ? (entries.find(e => e.path === paths[0])?.name ?? paths[0])
+      : t.countItems(count)
     if (settings.confirmDelete && !confirm(t.confirmDelete(name))) return
     try {
-      await DeleteItem(path)
-      if (selectedPath === path) selectedPath = ''
+      for (const p of paths) await DeleteItem(p)
+      selectedPaths = new Set()
+      selectedPath = ''
       await refresh()
     } catch (e) { error = String(e) }
   }
@@ -419,12 +466,14 @@
   async function doPaste() {
     if (!clipboard) return
     try {
-      if (clipboard.op === 'copy') {
-        await CopyItem(clipboard.path, currentPath)
-      } else {
-        await MoveItem(clipboard.path, currentPath)
-        clipboard = null
+      for (const path of clipboard.paths) {
+        if (clipboard.op === 'copy') {
+          await CopyItem(path, currentPath)
+        } else {
+          await MoveItem(path, currentPath)
+        }
       }
+      if (clipboard.op === 'cut') clipboard = null
       await refresh()
     } catch (e) { error = String(e) }
   }
@@ -432,9 +481,13 @@
   // ── 右クリックメニュー ──
   async function openContextMenu(e, entry) {
     e.preventDefault()
-    contextMenu = { visible: true, x: e.clientX, y: e.clientY, target: entry }
-    if (entry) selectedPath = entry.path
-    // 描画後にメニューのサイズを計測して画面外にはみ出さないよう補正
+    if (entry && !selectedPaths.has(entry.path)) {
+      selectedPaths = new Set([entry.path])
+      selectedPath = entry.path
+      lastClickedPath = entry.path
+    }
+    const paths = entry ? [...selectedPaths] : []
+    contextMenu = { visible: true, x: e.clientX, y: e.clientY, target: entry, paths }
     await tick()
     if (!contextMenuEl) return
     const rect = contextMenuEl.getBoundingClientRect()
@@ -563,7 +616,7 @@
       <span class="col-size">{t.colSize}</span>
       <span class="col-modified">{t.colDate}</span>
     </div>
-    <div class="file-list-body">
+    <div class="file-list-body" on:click={(e) => { if (e.target === e.currentTarget) { selectedPaths = new Set(); selectedPath = '' } }}>
       {#if searchQuery}
         {#if searchRunning}
           <div class="search-status">{t.searching}</div>
@@ -595,9 +648,9 @@
       {#each visibleEntries as entry (entry.path)}
         <div
           class="file-row"
-          class:selected={selectedPath === entry.path}
-          class:cut={clipboard?.op === 'cut' && clipboard?.path === entry.path}
-          on:click={() => selectEntry(entry.path)}
+          class:selected={selectedPaths.has(entry.path)}
+          class:cut={clipboard?.op === 'cut' && clipboard?.paths?.includes(entry.path)}
+          on:click={(e) => handleRowClick(entry, e)}
           on:dblclick={() => onEnter(entry)}
           on:contextmenu={(e) => { e.stopPropagation(); openContextMenu(e, entry) }}
           on:keydown={(e) => e.key === 'Enter' && onEnter(entry)}
@@ -650,7 +703,7 @@
     </div>
   </div>
 
-  {#if selectedPath && (thumbnailSrc || preview)}
+  {#if selectedPaths.size <= 1 && selectedPath && (thumbnailSrc || preview)}
     {#each [entries.find(e => e.path === selectedPath)] as entry}
     <div class="resizer" on:mousedown={onResizerMousedown} on:keydown={() => {}} class:resizing role="separator" aria-orientation="vertical"></div>
     <div class="preview-pane" style="width:{previewWidth}px">
@@ -697,11 +750,13 @@
     {:else}
       {t.countItems(visibleEntries.length)}
     {/if}
-    {#if selectedPath}
+    {#if selectedPaths.size > 1}
+      &nbsp;·&nbsp;{t.selectedMultiLabel(selectedPaths.size)}
+    {:else if selectedPath}
       &nbsp;·&nbsp;{t.selectedLabel(entries.find(e => e.path === selectedPath)?.name ?? '')}
     {/if}
     {#if clipboard}
-      &nbsp;·&nbsp;{t.clipboardLabel(clipboard.op)}
+      &nbsp;·&nbsp;{t.clipboardLabel(clipboard.op, clipboard.paths.length)}
     {/if}
   </div>
 </main>
@@ -710,28 +765,30 @@
   <div class="context-menu" bind:this={contextMenuEl} style="left:{contextMenu.x}px; top:{contextMenu.y}px">
     {#if contextMenu.target}
       <!-- ファイル / フォルダ上 -->
-      <button on:click={() => { onEnter(contextMenu.target); closeContextMenu() }}>
-        {contextMenu.target.isDir ? t.openFolder : t.open}
-      </button>
-      {#if contextMenu.target.isDir}
-        <button on:click={() => { OpenInNewWindow(contextMenu.target.path); closeContextMenu() }}>
-          {t.openNewWindow}
+      {#if contextMenu.paths.length === 1}
+        <button on:click={() => { onEnter(contextMenu.target); closeContextMenu() }}>
+          {contextMenu.target.isDir ? t.openFolder : t.open}
         </button>
-        <button on:click={() => {
-          consoleCwd = contextMenu.target.path
-          consoleVisible = true
-          consoleLabel = 'コンソール'
-          closeContextMenu()
-        }}>
-          {t.openConsole}
-        </button>
+        {#if contextMenu.target.isDir}
+          <button on:click={() => { OpenInNewWindow(contextMenu.target.path); closeContextMenu() }}>
+            {t.openNewWindow}
+          </button>
+          <button on:click={() => {
+            consoleCwd = contextMenu.target.path
+            consoleVisible = true
+            consoleLabel = 'コンソール'
+            closeContextMenu()
+          }}>
+            {t.openConsole}
+          </button>
+        {/if}
+        <hr />
       {/if}
-      <hr />
-      <button on:click={() => { clipboard = { path: contextMenu.target.path, op: 'copy' }; closeContextMenu() }}>
-        {t.copy} <span class="shortcut">Ctrl+C</span>
+      <button on:click={() => { clipboard = { paths: contextMenu.paths, op: 'copy' }; closeContextMenu() }}>
+        {t.copy}{contextMenu.paths.length > 1 ? ` (${contextMenu.paths.length})` : ''} <span class="shortcut">Ctrl+C</span>
       </button>
-      <button on:click={() => { clipboard = { path: contextMenu.target.path, op: 'cut' }; closeContextMenu() }}>
-        {t.cut} <span class="shortcut">Ctrl+X</span>
+      <button on:click={() => { clipboard = { paths: contextMenu.paths, op: 'cut' }; closeContextMenu() }}>
+        {t.cut}{contextMenu.paths.length > 1 ? ` (${contextMenu.paths.length})` : ''} <span class="shortcut">Ctrl+X</span>
       </button>
       {#if clipboard}
         <button on:click={() => { doPaste(); closeContextMenu() }}>
@@ -743,20 +800,22 @@
         {t.newFolder} <span class="shortcut">Ctrl+Shift+N</span>
       </button>
       <hr />
-      <button on:click={() => { doAddFavorite(contextMenu.target.path); closeContextMenu() }}>
-        {t.addFavorite}
-      </button>
-      <hr />
-      <button on:click={() => { startRename(contextMenu.target.path); closeContextMenu() }}>
-        {t.rename} <span class="shortcut">F2</span>
-      </button>
-      <button class="danger" on:click={() => { doDelete(contextMenu.target.path); closeContextMenu() }}>
-        {t.delete} <span class="shortcut">Del</span>
+      {#if contextMenu.paths.length === 1}
+        <button on:click={() => { doAddFavorite(contextMenu.target.path); closeContextMenu() }}>
+          {t.addFavorite}
+        </button>
+        <hr />
+        <button on:click={() => { startRename(contextMenu.target.path); closeContextMenu() }}>
+          {t.rename} <span class="shortcut">F2</span>
+        </button>
+      {/if}
+      <button class="danger" on:click={() => { doDelete(contextMenu.paths); closeContextMenu() }}>
+        {t.delete}{contextMenu.paths.length > 1 ? ` (${contextMenu.paths.length})` : ''} <span class="shortcut">Del</span>
       </button>
     {:else}
       {#if clipboard}
         <button on:click={() => { doPaste(); closeContextMenu() }}>
-          {t.paste} <span class="shortcut">Ctrl+V</span>
+          {t.paste}{clipboard.paths.length > 1 ? ` (${clipboard.paths.length})` : ''} <span class="shortcut">Ctrl+V</span>
         </button>
         <hr />
       {/if}

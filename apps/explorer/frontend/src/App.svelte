@@ -2,7 +2,8 @@
   import { onMount } from 'svelte'
   import { ListDirectory, GetHomeDir, GetDrives, GetParentDir, OpenFile,
            DeleteItem, RenameItem, CreateFolder, CopyItem, MoveItem,
-           GetThumbnail, GetPreview, OpenSettings, GetSettings } from '../wailsjs/go/main/App'
+           GetThumbnail, GetPreview, OpenSettings, GetSettings,
+           AddFavorite, RemoveFavorite } from '../wailsjs/go/main/App'
   import { EventsOn } from '../wailsjs/runtime/runtime'
   import TreeSidebar from './TreeSidebar.svelte'
 
@@ -37,6 +38,9 @@
   const tr = {
     ja: {
       sidebarLabel: 'フォルダ',
+      favoritesLabel: 'お気に入り',
+      addFavorite: 'お気に入りに追加',
+      removeFavorite: 'お気に入りから削除',
       back: '戻る', forward: '進む', up: '上へ', refresh: '更新', settingsBtn: '設定',
       colName: '名前', colSize: 'サイズ', colDate: '更新日時',
       openFolder: 'フォルダを開く', open: '開く',
@@ -54,6 +58,9 @@
     },
     en: {
       sidebarLabel: 'Folders',
+      favoritesLabel: 'Favorites',
+      addFavorite: 'Add to Favorites',
+      removeFavorite: 'Remove from Favorites',
       back: 'Back', forward: 'Forward', up: 'Up', refresh: 'Refresh', settingsBtn: 'Settings',
       colName: 'Name', colSize: 'Size', colDate: 'Modified',
       openFolder: 'Open Folder', open: 'Open',
@@ -83,6 +90,7 @@
     sortAsc: true,
     showExtensions: true,
     confirmDelete: true,
+    favorites: [],
   }
 
   // 設定適用: フィルタ + ソート
@@ -125,8 +133,20 @@
   }
 
   async function applySettings(s) {
-    settings = s
+    settings = { ...s, favorites: s.favorites ?? [] }
     previewWidth = s.previewWidth
+  }
+
+  async function doAddFavorite(path) {
+    await AddFavorite(path)
+    const updated = await GetSettings()
+    await applySettings(updated)
+  }
+
+  async function doRemoveFavorite(path) {
+    await RemoveFavorite(path)
+    const updated = await GetSettings()
+    await applySettings(updated)
   }
 
   onMount(async () => {
@@ -401,6 +421,10 @@
     {currentPath}
     onNavigate={navigate}
     label={t.sidebarLabel}
+    favorites={settings.favorites}
+    onRemoveFavorite={doRemoveFavorite}
+    favoritesLabel={t.favoritesLabel}
+    removeLabel={t.removeFavorite}
   />
 
   <div class="file-list" on:contextmenu={(e) => openContextMenu(e, null)}>
@@ -526,6 +550,10 @@
       <hr />
       <button on:click={() => { startCreateFolder(); closeContextMenu() }}>
         {t.newFolder} <span class="shortcut">Ctrl+Shift+N</span>
+      </button>
+      <hr />
+      <button on:click={() => { doAddFavorite(contextMenu.target.path); closeContextMenu() }}>
+        {t.addFavorite}
       </button>
       <hr />
       <button on:click={() => { startRename(contextMenu.target.path); closeContextMenu() }}>

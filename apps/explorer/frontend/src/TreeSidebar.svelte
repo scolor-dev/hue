@@ -1,11 +1,16 @@
 <script>
   import { onDestroy } from 'svelte'
   import TreeNode from './TreeNode.svelte'
+  import FavoritesPane from './FavoritesPane.svelte'
 
   export let drives = []
   export let currentPath = ''
   export let onNavigate
   export let label = 'フォルダ'
+  export let favorites = []
+  export let onRemoveFavorite = (_path) => {}
+  export let favoritesLabel = 'お気に入り'
+  export let removeLabel = 'お気に入りから削除'
 
   let sidebarWidth = 200
   let isResizing = false
@@ -37,8 +42,17 @@
 </script>
 
 <div class="sidebar-wrapper">
-  <div class="tree-sidebar" style="width: {sidebarWidth}px" role="tree" aria-label={label}>
-    <div class="sidebar-title">{label}</div>
+  <div class="tree-sidebar" style="width: {sidebarWidth}px">
+    <FavoritesPane
+      {favorites}
+      {currentPath}
+      {onNavigate}
+      onRemove={onRemoveFavorite}
+      label={favoritesLabel}
+      {removeLabel}
+    />
+
+    <div class="sidebar-title" role="tree" aria-label={label}>{label}</div>
     {#each drives as drive}
       <TreeNode
         path={drive}

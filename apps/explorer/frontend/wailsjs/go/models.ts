@@ -34,6 +34,7 @@ export namespace main {
 	    sortAsc: boolean;
 	    showExtensions: boolean;
 	    confirmDelete: boolean;
+	    favorites: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new HueSettings(source);
@@ -50,6 +51,7 @@ export namespace main {
 	        this.sortAsc = source["sortAsc"];
 	        this.showExtensions = source["showExtensions"];
 	        this.confirmDelete = source["confirmDelete"];
+	        this.favorites = source["favorites"];
 	    }
 	}
 

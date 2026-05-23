@@ -7,21 +7,23 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 type HueSettings struct {
-	ShowHidden     bool   `json:"showHidden"`
-	DateFormat     string `json:"dateFormat"`
-	PreviewWidth   int    `json:"previewWidth"`
-	ThumbSize      int    `json:"thumbSize"`
-	Language       string `json:"language"`
-	SortBy         string `json:"sortBy"`
-	SortAsc        bool   `json:"sortAsc"`
-	ShowExtensions bool   `json:"showExtensions"`
-	ConfirmDelete  bool   `json:"confirmDelete"`
+	ShowHidden     bool     `json:"showHidden"`
+	DateFormat     string   `json:"dateFormat"`
+	PreviewWidth   int      `json:"previewWidth"`
+	ThumbSize      int      `json:"thumbSize"`
+	Language       string   `json:"language"`
+	SortBy         string   `json:"sortBy"`
+	SortAsc        bool     `json:"sortAsc"`
+	ShowExtensions bool     `json:"showExtensions"`
+	ConfirmDelete  bool     `json:"confirmDelete"`
+	Favorites      []string `json:"favorites"`
 }
 
 func defaultHueSettings() HueSettings {
@@ -35,6 +37,7 @@ func defaultHueSettings() HueSettings {
 		SortAsc:        true,
 		ShowExtensions: true,
 		ConfirmDelete:  true,
+		Favorites:      []string{},
 	}
 }
 
@@ -127,5 +130,28 @@ func (a *App) GetSettings() HueSettings {
 }
 
 func (a *App) SaveSettings(s HueSettings) {
+	persistSettings(s)
+}
+
+func (a *App) AddFavorite(path string) {
+	s := loadSettings()
+	for _, f := range s.Favorites {
+		if strings.EqualFold(f, path) {
+			return
+		}
+	}
+	s.Favorites = append(s.Favorites, path)
+	persistSettings(s)
+}
+
+func (a *App) RemoveFavorite(path string) {
+	s := loadSettings()
+	kept := s.Favorites[:0]
+	for _, f := range s.Favorites {
+		if !strings.EqualFold(f, path) {
+			kept = append(kept, f)
+		}
+	}
+	s.Favorites = kept
 	persistSettings(s)
 }

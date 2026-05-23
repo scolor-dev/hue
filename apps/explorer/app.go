@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -21,15 +22,39 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	wailsCtx = ctx
+	initZigFS()
+	initZigWatcher()
+	initZigThumb()
+	initZigPreview()
+	startSettingsServer()
+}
+
+func (a *App) OpenSettings() {
+	// dev: requires `npm run dev` in apps/settings/frontend/
+	exec.Command("cmd", "/c", "start", "http://localhost:5200").Start()
 }
 
 type FileEntry struct {
-	Name    string `json:"name"`
-	Path    string `json:"path"`
-	IsDir   bool   `json:"isDir"`
-	Size    int64  `json:"size"`
-	ModTime string `json:"modTime"`
-	Ext     string `json:"ext"`
+	Name     string `json:"name"`
+	Path     string `json:"path"`
+	IsDir    bool   `json:"isDir"`
+	IsHidden bool   `json:"isHidden"`
+	Size     int64  `json:"size"`
+	ModTime  string `json:"modTime"`
+	Ext      string `json:"ext"`
+}
+
+func isHiddenWindows(path string) bool {
+	p, err := syscall.UTF16PtrFromString(path)
+	if err != nil {
+		return false
+	}
+	attrs, err := syscall.GetFileAttributes(p)
+	if err != nil {
+		return false
+	}
+	return attrs&syscall.FILE_ATTRIBUTE_HIDDEN != 0
 }
 
 func (a *App) GetHomeDir() string {
@@ -52,6 +77,17 @@ func (a *App) GetDrives() []string {
 }
 
 func (a *App) ListDirectory(path string) ([]FileEntry, error) {
+	a.startWatching(path)
+	if zigFS != nil {
+		if entries, err := zigFS.listDirectory(path); err == nil {
+			return entries, nil
+		}
+		// Zig DLL が失敗したら Go 実装にフォールバック
+	}
+	return goListDirectory(path)
+}
+
+func goListDirectory(path string) ([]FileEntry, error) {
 	entries, err := os.ReadDir(path)
 	if err != nil {
 		return nil, err
@@ -67,13 +103,15 @@ func (a *App) ListDirectory(path string) ([]FileEntry, error) {
 		if !entry.IsDir() {
 			ext = strings.ToLower(filepath.Ext(entry.Name()))
 		}
+		entryPath := filepath.Join(path, entry.Name())
 		files = append(files, FileEntry{
-			Name:    entry.Name(),
-			Path:    filepath.Join(path, entry.Name()),
-			IsDir:   entry.IsDir(),
-			Size:    info.Size(),
-			ModTime: info.ModTime().Format(time.DateTime),
-			Ext:     ext,
+			Name:     entry.Name(),
+			Path:     entryPath,
+			IsDir:    entry.IsDir(),
+			IsHidden: isHiddenWindows(entryPath),
+			Size:     info.Size(),
+			ModTime:  info.ModTime().Format(time.DateTime),
+			Ext:      ext,
 		})
 	}
 

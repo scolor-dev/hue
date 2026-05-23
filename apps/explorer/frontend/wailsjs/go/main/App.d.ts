@@ -14,10 +14,20 @@ export function GetHomeDir():Promise<string>;
 
 export function GetParentDir(arg1:string):Promise<string>;
 
+export function GetPreview(arg1:string):Promise<string>;
+
+export function GetSettings():Promise<main.HueSettings>;
+
+export function GetThumbnail(arg1:string):Promise<string>;
+
 export function ListDirectory(arg1:string):Promise<Array<main.FileEntry>>;
 
 export function MoveItem(arg1:string,arg2:string):Promise<void>;
 
 export function OpenFile(arg1:string):Promise<void>;
 
+export function OpenSettings():Promise<void>;
+
 export function RenameItem(arg1:string,arg2:string):Promise<void>;
+
+export function SaveSettings(arg1:main.HueSettings):Promise<void>;

@@ -26,6 +26,18 @@ export function GetParentDir(arg1) {
   return window['go']['main']['App']['GetParentDir'](arg1);
 }
 
+export function GetPreview(arg1) {
+  return window['go']['main']['App']['GetPreview'](arg1);
+}
+
+export function GetSettings() {
+  return window['go']['main']['App']['GetSettings']();
+}
+
+export function GetThumbnail(arg1) {
+  return window['go']['main']['App']['GetThumbnail'](arg1);
+}
+
 export function ListDirectory(arg1) {
   return window['go']['main']['App']['ListDirectory'](arg1);
 }
@@ -38,6 +50,14 @@ export function OpenFile(arg1) {
   return window['go']['main']['App']['OpenFile'](arg1);
 }
 
+export function OpenSettings() {
+  return window['go']['main']['App']['OpenSettings']();
+}
+
 export function RenameItem(arg1, arg2) {
   return window['go']['main']['App']['RenameItem'](arg1, arg2);
+}
+
+export function SaveSettings(arg1) {
+  return window['go']['main']['App']['SaveSettings'](arg1);
 }

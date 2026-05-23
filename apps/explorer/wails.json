@@ -1,0 +1,13 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "explorer",
+  "outputfilename": "explorer",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "scolor-dev",
+    "email": "221649086+scolor-dev@users.noreply.github.com"
+  }
+}

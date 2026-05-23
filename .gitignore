@@ -2,5 +2,7 @@ node_modules/
 build/bin/
 frontend/dist/
 zig-out/
+bin/
 .zig-cache
 *.exe
+*.zip

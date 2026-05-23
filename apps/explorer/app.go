@@ -33,6 +33,7 @@ func (a *App) startup(ctx context.Context) {
 	initZigThumb()
 	initZigPreview()
 	initZigFileops()
+	initZigSearch()
 	a.subscribeSettingsEvents()
 }
 
@@ -320,6 +321,15 @@ func goListDirectory(path string) ([]FileEntry, error) {
 	})
 
 	return files, nil
+}
+
+func (a *App) SearchFiles(root, query string) []SearchEntry {
+	if zigSearch != nil {
+		if results, err := zigSearch.search(root, query); err == nil {
+			return results
+		}
+	}
+	return goSearch(root, query)
 }
 
 func (a *App) GetParentDir(path string) string {

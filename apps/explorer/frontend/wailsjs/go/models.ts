@@ -122,6 +122,28 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class SearchEntry {
+	    name: string;
+	    path: string;
+	    isDir: boolean;
+	    isHidden: boolean;
+	    size: number;
+	    ext: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SearchEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.isDir = source["isDir"];
+	        this.isHidden = source["isHidden"];
+	        this.size = source["size"];
+	        this.ext = source["ext"];
+	    }
+	}
 
 }
 

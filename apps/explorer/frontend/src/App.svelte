@@ -4,7 +4,7 @@
            DeleteItem, RenameItem, CreateFolder, CopyItem, MoveItem,
            GetThumbnail, GetPreview, OpenSettings, GetSettings,
            AddFavorite, RemoveFavorite,
-           GetStartupPath, OpenInNewWindow, ExecInConsole } from '../wailsjs/go/main/App'
+           GetStartupPath, OpenInNewWindow, ExecInConsole, SearchFiles } from '../wailsjs/go/main/App'
   import { EventsOn } from '../wailsjs/runtime/runtime'
   import TreeSidebar from './TreeSidebar.svelte'
   import ConsolePane from './ConsolePane.svelte'
@@ -45,6 +45,10 @@
       favoritesLabel: 'お気に入り',
       addFavorite: 'お気に入りに追加',
       removeFavorite: 'お気に入りから削除',
+      searchPlaceholder: '検索... (Ctrl+F)',
+      searchCount: (n) => `${n} 件の検索結果`,
+      searchEmpty: '見つかりませんでした',
+      searching: '検索中...',
       back: '戻る', forward: '進む', up: '上へ', refresh: '更新', settingsBtn: '設定',
       colName: '名前', colSize: 'サイズ', colDate: '更新日時',
       openFolder: 'フォルダを開く', open: '開く', openNewWindow: '新しいウィンドウで開く', openConsole: 'コンソールで開く',
@@ -66,6 +70,10 @@
       favoritesLabel: 'Favorites',
       addFavorite: 'Add to Favorites',
       removeFavorite: 'Remove from Favorites',
+      searchPlaceholder: 'Search... (Ctrl+F)',
+      searchCount: (n) => `${n} result${n !== 1 ? 's' : ''}`,
+      searchEmpty: 'No results found',
+      searching: 'Searching...',
       back: 'Back', forward: 'Forward', up: 'Up', refresh: 'Refresh', settingsBtn: 'Settings',
       colName: 'Name', colSize: 'Size', colDate: 'Modified',
       openFolder: 'Open Folder', open: 'Open', openNewWindow: 'Open in New Window', openConsole: 'Open in Console',
@@ -113,6 +121,49 @@
     })
     return list
   })()
+
+  // 検索
+  let searchQuery = ''
+  let searchResults = []
+  let searchRunning = false
+  let searchTimer = null
+  let searchInputEl = null
+
+  function onSearchInput(e) {
+    searchQuery = e.target.value
+    clearTimeout(searchTimer)
+    if (!searchQuery.trim()) { searchResults = []; return }
+    searchTimer = setTimeout(doSearch, 300)
+  }
+
+  async function doSearch() {
+    if (!searchQuery.trim()) return
+    searchRunning = true
+    try {
+      searchResults = (await SearchFiles(currentPath, searchQuery.trim())) ?? []
+    } catch { searchResults = [] }
+    searchRunning = false
+  }
+
+  function clearSearch() {
+    searchQuery = ''
+    searchResults = []
+    clearTimeout(searchTimer)
+    searchRunning = false
+  }
+
+  async function openSearchResult(entry) {
+    clearSearch()
+    if (entry.isDir) {
+      await navigate(entry.path)
+    } else {
+      const parent = await GetParentDir(entry.path)
+      if (parent) {
+        await navigate(parent)
+        selectedPath = entry.path
+      }
+    }
+  }
 
   // コンソールパネル
   let consoleVisible = false
@@ -203,6 +254,7 @@
   })
 
   async function navigate(path) {
+    clearSearch()
     try {
       const result = await ListDirectory(path)
       entries = result ?? []
@@ -282,7 +334,17 @@
 
   // ── キーボードショートカット ──
   async function handleKeydown(e) {
+    if (document.activeElement === searchInputEl) {
+      if (e.key === 'Escape') clearSearch()
+      return
+    }
     if (renamingPath || creatingFolder) return
+
+    if (e.ctrlKey && e.key === 'f') {
+      e.preventDefault()
+      searchInputEl?.focus()
+      return
+    }
 
     if (e.key === 'Delete' && selectedPath) {
       await doDelete(selectedPath)
@@ -457,6 +519,22 @@
       on:keydown={handleAddressKeydown}
       spellcheck="false"
     />
+    <div class="search-box" class:active={searchQuery}>
+      <span class="search-icon">⌕</span>
+      <input
+        class="search-input"
+        bind:this={searchInputEl}
+        type="text"
+        placeholder={t.searchPlaceholder}
+        value={searchQuery}
+        on:input={onSearchInput}
+        on:keydown={(e) => e.stopPropagation()}
+        spellcheck="false"
+      />
+      {#if searchQuery}
+        <button class="search-clear" on:click={clearSearch} tabindex="-1">✕</button>
+      {/if}
+    </div>
     <button on:click={OpenSettings} title={t.settingsBtn}>&#9881;</button>
   </div>
 
@@ -486,6 +564,34 @@
       <span class="col-modified">{t.colDate}</span>
     </div>
     <div class="file-list-body">
+      {#if searchQuery}
+        {#if searchRunning}
+          <div class="search-status">{t.searching}</div>
+        {:else if searchResults.length === 0}
+          <div class="search-status">{t.searchEmpty}</div>
+        {:else}
+          {#each searchResults as entry (entry.path)}
+            <div
+              class="file-row"
+              class:selected={selectedPath === entry.path}
+              on:click={() => { selectedPath = entry.path }}
+              on:dblclick={() => openSearchResult(entry)}
+              on:keydown={(e) => e.key === 'Enter' && openSearchResult(entry)}
+              on:contextmenu={(e) => { e.stopPropagation(); openContextMenu(e, entry) }}
+              role="row"
+              tabindex="0"
+            >
+              <span class="col-icon">{getIcon(entry)}</span>
+              <span class="col-name search-result-name">
+                <span class="result-filename">{entry.name}</span>
+                <span class="result-dir">{entry.path.slice(0, entry.path.length - entry.name.length - 1)}</span>
+              </span>
+              <span class="col-size">{formatSize(entry.size, entry.isDir)}</span>
+              <span class="col-modified"></span>
+            </div>
+          {/each}
+        {/if}
+      {:else}
       {#each visibleEntries as entry (entry.path)}
         <div
           class="file-row"
@@ -540,6 +646,7 @@
           </span>
         </div>
       {/if}
+      {/if}
     </div>
   </div>
 
@@ -585,7 +692,11 @@
   {/if}
 
   <div class="statusbar">
-    {t.countItems(visibleEntries.length)}
+    {#if searchQuery}
+      {searchRunning ? t.searching : t.searchCount(searchResults.length)}
+    {:else}
+      {t.countItems(visibleEntries.length)}
+    {/if}
     {#if selectedPath}
       &nbsp;·&nbsp;{t.selectedLabel(entries.find(e => e.path === selectedPath)?.name ?? '')}
     {/if}
@@ -856,6 +967,7 @@
     border-radius: 3px;
     margin: 0 2px;
     align-items: center;
+    min-height: 28px;
   }
 
   .file-row:hover { background: #2a2d2e; }
@@ -953,6 +1065,73 @@
     color: #858585;
     font-size: 11px;
     margin-left: 16px;
+  }
+
+  /* ── Search box ── */
+  .search-box {
+    display: flex;
+    align-items: center;
+    background: #3c3c3c;
+    border: 1px solid #555;
+    border-radius: 4px;
+    height: 26px;
+    padding: 0 6px;
+    gap: 4px;
+    min-width: 160px;
+    max-width: 240px;
+    flex-shrink: 0;
+    transition: border-color 0.15s;
+  }
+  .search-box.active, .search-box:focus-within { border-color: #007acc; }
+  .search-icon { color: #858585; font-size: 15px; user-select: none; }
+  .search-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #d4d4d4;
+    font-size: 12px;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-width: 0;
+  }
+  .search-input::placeholder { color: #666; }
+  .search-clear {
+    background: transparent;
+    border: none;
+    color: #858585;
+    cursor: pointer;
+    padding: 0;
+    font-size: 11px;
+    line-height: 1;
+    width: auto !important;
+    height: auto !important;
+  }
+  .search-clear:hover { color: #d4d4d4; }
+
+  .search-status {
+    padding: 20px 16px;
+    color: #858585;
+    font-size: 13px;
+  }
+
+  .search-result-name {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    gap: 1px;
+  }
+  .result-filename {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+  }
+  .result-dir {
+    font-size: 11px;
+    color: #6c6c6c;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* ── Scrollbar ── */

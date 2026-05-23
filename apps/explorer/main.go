@@ -41,6 +41,12 @@ func main() {
 		Bind: []interface{}{
 			app,
 		},
+		DragAndDrop: &options.DragAndDrop{
+			EnableFileDrop:     true,
+			DisableWebViewDrop: false,
+			CSSDropProperty:    "--wails-drop-target",
+			CSSDropValue:       "drop",
+		},
 	})
 	if err != nil {
 		println("Error:", err.Error())

@@ -5,7 +5,7 @@
            GetThumbnail, GetPreview, OpenSettings, GetSettings,
            AddFavorite, RemoveFavorite,
            GetStartupPath, OpenInNewWindow, ExecInConsole, SearchFiles } from '../wailsjs/go/main/App'
-  import { EventsOn } from '../wailsjs/runtime/runtime'
+  import { EventsOn, OnFileDrop } from '../wailsjs/runtime/runtime'
   import TreeSidebar from './TreeSidebar.svelte'
   import ConsolePane from './ConsolePane.svelte'
 
@@ -204,6 +204,9 @@
     consoleLines = [...consoleLines, { id: consoleSeq++, type, text }]
   }
 
+  // ドラッグ＆ドロップ
+  let dropOver = false
+
   // プレビューパネル リサイズ
   let previewWidth = 220
   let resizing = false
@@ -253,6 +256,17 @@
     const initialPath = startupPath || await GetHomeDir()
     await navigate(initialPath)
     window.addEventListener('click', closeContextMenu)
+    OnFileDrop(async (_x, _y, paths) => {
+      dropOver = false
+      if (!currentPath || paths.length === 0) return
+      let failed = []
+      for (const p of paths) {
+        try { await CopyItem(p, currentPath) }
+        catch { failed.push(p) }
+      }
+      if (failed.length) error = `コピー失敗: ${failed.join(', ')}`
+      await refresh()
+    }, true)
     EventsOn('fs:changed', () => refresh())
     EventsOn('settings:changed', async () => {
       const updated = await GetSettings()
@@ -665,7 +679,15 @@
       <span class="col-size">{t.colSize}</span>
       <span class="col-modified">{t.colDate}</span>
     </div>
-    <div class="file-list-body" on:click={(e) => { if (e.target === e.currentTarget) { selectedPaths = new Set(); selectedPath = '' } }}>
+    <div class="file-list-body"
+      class:drop-over={dropOver}
+      style="--wails-drop-target: drop"
+      on:dragenter={() => dropOver = true}
+      on:dragleave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) dropOver = false }}
+      on:dragover={(e) => { e.preventDefault(); dropOver = true }}
+      on:drop={() => dropOver = false}
+      on:click={(e) => { if (e.target === e.currentTarget) { selectedPaths = new Set(); selectedPath = '' } }}
+    >
       {#if searchQuery}
         {#if searchRunning}
           <div class="search-status">{t.searching}</div>
@@ -1065,6 +1087,12 @@
     flex: 1;
     overflow-y: auto;
     padding: 2px 0;
+  }
+
+  .file-list-body.drop-over {
+    outline: 2px dashed #007acc;
+    outline-offset: -2px;
+    background: rgba(0, 122, 204, 0.08);
   }
 
   .file-row {

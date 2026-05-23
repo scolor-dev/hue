@@ -11,6 +11,7 @@ const FILETIME = windows.FILETIME;
 const INVALID_HANDLE_VALUE = windows.INVALID_HANDLE_VALUE;
 
 const FILE_ATTRIBUTE_DIRECTORY: DWORD = 0x10;
+const FILE_ATTRIBUTE_HIDDEN: DWORD = 0x02;
 const MAX_PATH = 260;
 
 const WIN32_FIND_DATAW = extern struct {
@@ -43,6 +44,7 @@ extern "kernel32" fn FindClose(hFindFile: HANDLE) callconv(.winapi) BOOL;
 const Entry = struct {
     name: []const u8,
     isDir: bool,
+    isHidden: bool,
     size: i64,
     modTime: []const u8,
     ext: []const u8,
@@ -102,6 +104,7 @@ fn listDir(alloc: std.mem.Allocator, path_utf8: []const u8, out: []u8) !usize {
             try list.append(.{
                 .name = name,
                 .isDir = is_dir,
+                .isHidden = find_data.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN != 0,
                 .size = size,
                 .modTime = mod_time,
                 .ext = ext,

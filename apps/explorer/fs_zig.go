@@ -42,11 +42,12 @@ func initZigFS() {
 }
 
 type zigEntry struct {
-	Name    string `json:"name"`
-	IsDir   bool   `json:"isDir"`
-	Size    int64  `json:"size"`
-	ModTime string `json:"modTime"`
-	Ext     string `json:"ext"`
+	Name     string `json:"name"`
+	IsDir    bool   `json:"isDir"`
+	IsHidden bool   `json:"isHidden"`
+	Size     int64  `json:"size"`
+	ModTime  string `json:"modTime"`
+	Ext      string `json:"ext"`
 }
 
 func (z *zigFSLib) listDirectory(path string) ([]FileEntry, error) {
@@ -76,7 +77,7 @@ func (z *zigFSLib) listDirectory(path string) ([]FileEntry, error) {
 			Name:     ze.Name,
 			Path:     p,
 			IsDir:    ze.IsDir,
-			IsHidden: isHiddenWindows(p),
+			IsHidden: ze.IsHidden,
 			Size:     ze.Size,
 			ModTime:  ze.ModTime,
 			Ext:      ze.Ext,

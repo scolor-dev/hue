@@ -1,7 +1,8 @@
 <script>
   import { onMount } from 'svelte'
   import { ListDirectory, GetHomeDir, GetDrives, GetParentDir, OpenFile,
-           DeleteItem, RenameItem, CreateFolder, CopyItem, MoveItem } from '../wailsjs/go/main/App'
+           DeleteItem, RenameItem, CreateFolder, CopyItem, MoveItem,
+           GetThumbnail } from '../wailsjs/go/main/App'
   import { EventsOn } from '../wailsjs/runtime/runtime'
 
   let currentPath = ''
@@ -26,6 +27,10 @@
   // クリップボード
   let clipboard = null // { path, op: 'copy' | 'cut' }
 
+  // サムネイル
+  let thumbnailSrc = ''
+  const IMG_EXTS = new Set(['.jpg','.jpeg','.png','.gif','.webp','.bmp','.tiff','.ico'])
+
   onMount(async () => {
     drives = await GetDrives()
     const home = await GetHomeDir()
@@ -48,6 +53,15 @@
       selectedPath = ''
     } catch (e) {
       error = String(e)
+    }
+  }
+
+  async function selectEntry(path) {
+    selectedPath = path
+    thumbnailSrc = ''
+    const entry = entries.find(e => e.path === path)
+    if (entry && !entry.isDir && IMG_EXTS.has(entry.ext)) {
+      thumbnailSrc = await GetThumbnail(path)
     }
   }
 
@@ -261,7 +275,7 @@
           class="file-row"
           class:selected={selectedPath === entry.path}
           class:cut={clipboard?.op === 'cut' && clipboard?.path === entry.path}
-          on:click={() => (selectedPath = entry.path)}
+          on:click={() => selectEntry(entry.path)}
           on:dblclick={() => onEnter(entry)}
           on:contextmenu={(e) => { e.stopPropagation(); openContextMenu(e, entry) }}
           on:keydown={(e) => e.key === 'Enter' && onEnter(entry)}
@@ -314,6 +328,9 @@
   </div>
 
   <div class="statusbar">
+    {#if thumbnailSrc}
+      <img class="thumb-preview" src={thumbnailSrc} alt="preview" />
+    {/if}
     {entries.length} 件
     {#if selectedPath}
       &nbsp;・&nbsp;{entries.find(e => e.path === selectedPath)?.name} を選択中
@@ -518,10 +535,21 @@
 
   /* ── Statusbar ── */
   .statusbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     padding: 3px 10px;
     background: #007acc;
     color: white;
     font-size: 12px;
+    flex-shrink: 0;
+  }
+
+  .thumb-preview {
+    height: 20px;
+    width: 20px;
+    object-fit: cover;
+    border-radius: 2px;
     flex-shrink: 0;
   }
 

@@ -41,6 +41,8 @@ type HueSettings struct {
 	LastPath          string            `json:"lastPath"`           // startupMode == "last" のとき自動保存
 	ClickToOpen       string            `json:"clickToOpen"`       // "single" | "double"
 	DisabledPlugins   []string          `json:"disabledPlugins"`
+	ThemePreset       string            `json:"themePreset"`  // "dark" | "darker" | "midnight" | "forest" | "sunset" | "ocean"
+	AccentColor       string            `json:"accentColor"`  // カスタムカラー override
 }
 
 func defaultHueSettings() HueSettings {
@@ -61,6 +63,8 @@ func defaultHueSettings() HueSettings {
 		LastPath:          "",
 		ClickToOpen:       "double",
 		DisabledPlugins:   []string{},
+		ThemePreset:       "dark",
+		AccentColor:       "",
 	}
 }
 
@@ -313,6 +317,7 @@ func startSettingsServer() {
 				http.NotFound(w, r)
 				return
 			}
+			w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
 			// SPA: ファイルが存在しない場合は index.html を返す
 			target := filepath.Join(distDir, filepath.FromSlash(r.URL.Path))
 			if _, serr := os.Stat(target); os.IsNotExist(serr) {

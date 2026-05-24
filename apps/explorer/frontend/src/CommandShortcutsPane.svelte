@@ -86,7 +86,7 @@
   .section-label {
     font-size: 11px;
     font-weight: 600;
-    color: #858585;
+    color: var(--hue-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.08em;
     padding: 8px 12px 4px;
@@ -102,17 +102,17 @@
     width: 100%;
     height: 26px;
     padding: 0 8px;
-    background: #2d2d2d;
-    border: 1px solid #3c3c3c;
+    background: var(--hue-bg-panel);
+    border: 1px solid var(--hue-border);
     border-radius: 4px;
-    color: #cccccc;
+    color: var(--hue-text);
     font-size: 12px;
     cursor: pointer;
     text-align: left;
     transition: background 0.1s, border-color 0.1s;
   }
 
-  .sc-btn:hover { background: #094771; border-color: #007acc; color: #fff; }
+  .sc-btn:hover { background: var(--hue-accent-dim); border-color: var(--hue-accent); color: #fff; }
   .sc-btn.running { opacity: 0.6; cursor: wait; }
 
   .sc-icon { font-size: 13px; flex-shrink: 0; }
@@ -122,14 +122,14 @@
   .sc-prompt {
     margin-top: 4px;
     padding: 6px 4px;
-    background: #1e1e1e;
-    border: 1px solid #3c3c3c;
+    background: var(--hue-bg);
+    border: 1px solid var(--hue-border);
     border-radius: 4px;
   }
 
   .sc-prompt-msg {
     font-size: 11px;
-    color: #858585;
+    color: var(--hue-text-muted);
     margin-bottom: 4px;
     padding: 0 2px;
   }
@@ -138,9 +138,9 @@
 
   .sc-input {
     flex: 1;
-    background: #3c3c3c;
+    background: var(--hue-border);
     border: 1px solid #555;
-    color: #d4d4d4;
+    color: var(--hue-text);
     padding: 2px 6px;
     border-radius: 3px;
     font-size: 12px;
@@ -149,10 +149,10 @@
     min-width: 0;
   }
 
-  .sc-input:focus { border-color: #007acc; }
+  .sc-input:focus { border-color: var(--hue-accent); }
 
   .sc-run-btn {
-    background: #007acc;
+    background: var(--hue-accent);
     border: none;
     color: white;
     padding: 0 8px;
@@ -166,7 +166,7 @@
 
   .section-sep {
     height: 1px;
-    background: #3c3c3c;
+    background: var(--hue-border);
     margin: 6px 8px;
   }
 </style>

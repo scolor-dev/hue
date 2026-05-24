@@ -25,9 +25,7 @@
 docs/*.md.js linguist-language=JavaScript
 docs/*.md.js linguist-detectable=true
 docs/*.md.js linguist-documentation=false
-examples/plugins/*.js linguist-language=JavaScript
-examples/plugins/*.js linguist-detectable=true
-examples/plugins/*.js linguist-vendored=false
+examples/plugins/** linguist-detectable=true
 
 # ---------------------------------------------------------
 # Exclude ONLY build artifacts

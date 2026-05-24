@@ -1,27 +1,49 @@
-# GitHub Linguist — language whitelist
-# Counted: Svelte / Zig / JavaScript / Vue / Go / TypeScript / Elixir
+# =========================================================
+# GitHub Linguist — project language policy
+# Counted:
+# Svelte / Zig / JavaScript / Vue / Go / TypeScript / Elixir
+# =========================================================
 
-# ---- force-detect --------------------------------------------------------
+# ---------------------------------------------------------
+# Force language detection
+# ---------------------------------------------------------
 
-# JS plugin examples (examples/ dir is excluded by Linguist by default)
-examples/plugins/*.js linguist-language=JavaScript
-examples/plugins/*.js linguist-detectable=true
-examples/plugins/*.js linguist-vendored=false
+*.svelte linguist-language=Svelte
+*.zig linguist-language=Zig
+*.js linguist-language=JavaScript
+*.vue linguist-language=Vue
+*.go linguist-language=Go
+*.ts linguist-language=TypeScript
+*.ex linguist-language=Elixir
+*.exs linguist-language=Elixir
 
-# docs/*.md.js — Markdown content with .js extension for language stats
-docs/*.md.js linguist-language=JavaScript
-docs/*.md.js linguist-detectable=true
-docs/*.md.js linguist-documentation=false
+# ---------------------------------------------------------
+# Include normally ignored directories
+# ---------------------------------------------------------
 
-# ---- exclude: Wails build artifacts (NSIS, plist, manifest, ico ...) ----
-apps/explorer/build/**                     linguist-vendored=true
+examples/** linguist-detectable=true
+docs/** linguist-detectable=true
 
-# ---- exclude: auto-generated Wails JS runtime ---------------------------
-apps/explorer/frontend/wailsjs/runtime/**  linguist-vendored=true
+# ---------------------------------------------------------
+# Exclude ONLY build artifacts
+# ---------------------------------------------------------
 
-# ---- exclude: frontend build output -------------------------------------
-apps/explorer/frontend/dist/**             linguist-vendored=true
-apps/settings/frontend/dist/**             linguist-vendored=true
+# Wails build output
+apps/explorer/build/** linguist-vendored=true
 
-# ---- exclude: build scripts ---------------------------------------------
-build.ps1                                  linguist-detectable=false
+# Frontend dist output
+apps/explorer/frontend/dist/** linguist-vendored=true
+apps/settings/frontend/dist/** linguist-vendored=true
+
+# Svelte build cache
+.svelte-kit/** linguist-vendored=true
+
+# Zig build/cache
+zig-cache/** linguist-vendored=true
+zig-out/** linguist-vendored=true
+
+# Node modules
+node_modules/** linguist-vendored=true
+
+# Coverage
+coverage/** linguist-vendored=true

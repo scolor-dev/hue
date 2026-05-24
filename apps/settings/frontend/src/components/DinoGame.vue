@@ -1,258 +1,85 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+import {
+  GROUND_Y, DINO_H,
+  updateDino, updateClouds, updateObstacles, spawnObstacle, checkCollision,
+  makeSpeed, spawnClouds, drawScene,
+} from './dinoEngine.js'
 
-// ── Canvas & state ──────────────────────────────────────────────
-const canvas  = ref<HTMLCanvasElement | null>(null)
-const score   = ref(0)
-const best    = ref(0)
-const phase   = ref<'idle' | 'running' | 'dead'>('idle')
+const canvas = ref<HTMLCanvasElement | null>(null)
+const score  = ref(0)
+const best   = ref(0)
+const phase  = ref<'idle' | 'running' | 'dead'>('idle')
 
-// ── Constants ───────────────────────────────────────────────────
-const W          = 800
-const H          = 320
-const GROUND_Y   = 270
-const DINO_X     = 80
-const DINO_W     = 44
-const DINO_H     = 50
-const GRAVITY    = 0.55
-const JUMP_FORCE = -12.5
-const BASE_SPEED = 5
-
-// ── Mutable game state (not reactive — updated every frame) ──────
-let rafId       = 0
-let frame       = 0
-let dinoY       = GROUND_Y - DINO_H
-let dinoVY      = 0
-let speed       = BASE_SPEED
-let nextIn      = 100
-let obstacles: { x: number; w: number; h: number; arms: boolean }[] = []
-let clouds:    { x: number; y: number; w: number }[] = []
-
-// ── Cloud helpers ────────────────────────────────────────────────
-function spawnClouds() {
-  clouds = Array.from({ length: 5 }, (_, i) => ({
-    x: 100 + i * 160,
-    y: 40 + Math.random() * 80,
-    w: 60 + Math.random() * 60,
-  }))
+// ゲームループ用のミュータブルな状態（リアクティブ不要）
+const gs = {
+  frame: 0, dinoY: GROUND_Y - DINO_H, dinoVY: 0,
+  obstacles: [] as { x: number; w: number; h: number; arms: boolean }[],
+  clouds: spawnClouds(),
+  nextIn: 100,
 }
 
-// ── Jump / start / restart ───────────────────────────────────────
+let rafId = 0
+
 function onAction() {
-  if (phase.value === 'idle') { startGame(); return }
-  if (phase.value === 'dead') { restart();   return }
-  if (dinoY >= GROUND_Y - DINO_H - 2) dinoVY = JUMP_FORCE
+  if (phase.value === 'idle') { start(); return }
+  if (phase.value === 'dead') { restart(); return }
+  if (gs.dinoY >= GROUND_Y - DINO_H - 2) gs.dinoVY = -12.5
 }
 
-function startGame() {
+function start() {
   phase.value = 'running'
   restart()
 }
 
 function restart() {
-  score.value  = 0
-  frame        = 0
-  dinoY        = GROUND_Y - DINO_H
-  dinoVY       = 0
-  obstacles    = []
-  speed        = BASE_SPEED
-  nextIn       = 100
-  phase.value  = 'running'
-  spawnClouds()
+  score.value = 0
+  Object.assign(gs, {
+    frame: 0, dinoY: GROUND_Y - DINO_H, dinoVY: 0,
+    obstacles: [], clouds: spawnClouds(), nextIn: 100,
+  })
+  phase.value = 'running'
   cancelAnimationFrame(rafId)
   rafId = requestAnimationFrame(tick)
 }
 
-// ── Main loop ────────────────────────────────────────────────────
 function tick() {
   const ctx = canvas.value?.getContext('2d')
   if (!ctx) return
 
-  frame++
-  score.value  = Math.floor(frame / 6)
-  speed        = BASE_SPEED + Math.floor(score.value / 150) * 0.4
+  gs.frame++
+  score.value = Math.floor(gs.frame / 6)
+  const speed = makeSpeed(score.value)
 
-  // Dino physics
-  dinoVY += GRAVITY
-  dinoY  += dinoVY
-  if (dinoY >= GROUND_Y - DINO_H) { dinoY = GROUND_Y - DINO_H; dinoVY = 0 }
+  updateDino(gs)
+  updateClouds(gs.clouds, speed)
 
-  // Clouds (slow parallax)
-  clouds = clouds.map(c => ({ ...c, x: c.x - speed * 0.3 }))
-  clouds.forEach(c => { if (c.x + c.w < 0) { c.x = W + 20; c.y = 40 + Math.random() * 80 } })
-
-  // Obstacles
-  nextIn--
-  if (nextIn <= 0) {
-    const h    = 28 + Math.random() * 36
-    const arms = Math.random() > 0.4
-    obstacles.push({ x: W + 10, w: 18 + Math.random() * 10, h, arms })
-    nextIn = 55 + Math.random() * 70
+  gs.nextIn--
+  if (gs.nextIn <= 0) {
+    spawnObstacle(gs.obstacles)
+    gs.nextIn = 55 + Math.random() * 70
   }
-  obstacles = obstacles
-    .map(o => ({ ...o, x: o.x - speed }))
-    .filter(o => o.x > -60)
+  updateObstacles(gs.obstacles, speed)
 
-  // Collision (shrunken hitbox)
-  const dx = DINO_X + 10, dw = DINO_W - 20, dy = dinoY + 6, dh = DINO_H - 10
-  for (const o of obstacles) {
-    const ox = o.x + 3, ow = o.w - 6, oy = GROUND_Y - o.h, oh = o.h
-    if (dx + dw > ox && dx < ox + ow && dy + dh > oy && dy < oy + oh) {
-      if (score.value > best.value) best.value = score.value
-      phase.value = 'dead'
-      draw(ctx)
-      return
-    }
+  if (checkCollision(gs.dinoY, gs.obstacles)) {
+    if (score.value > best.value) best.value = score.value
+    phase.value = 'dead'
+    drawScene(ctx, { ...gs, score: score.value, phase: phase.value })
+    return
   }
 
-  draw(ctx)
+  drawScene(ctx, { ...gs, score: score.value, phase: phase.value })
   rafId = requestAnimationFrame(tick)
 }
 
-// ── Draw ─────────────────────────────────────────────────────────
-function draw(ctx: CanvasRenderingContext2D) {
-  ctx.clearRect(0, 0, W, H)
-
-  // Sky
-  ctx.fillStyle = '#1e1e1e'
-  ctx.fillRect(0, 0, W, H)
-
-  // Clouds
-  ctx.fillStyle = '#2a2d2e'
-  for (const c of clouds) {
-    ctx.beginPath()
-    ctx.ellipse(c.x + c.w * 0.3, c.y, c.w * 0.3, 12, 0, 0, Math.PI * 2)
-    ctx.ellipse(c.x + c.w * 0.6, c.y - 4, c.w * 0.25, 10, 0, 0, Math.PI * 2)
-    ctx.ellipse(c.x + c.w * 0.7, c.y + 2, c.w * 0.2, 9, 0, 0, Math.PI * 2)
-    ctx.fill()
-  }
-
-  // Ground
-  ctx.fillStyle = '#555'
-  ctx.fillRect(0, GROUND_Y, W, 2)
-  ctx.fillStyle = '#3c3c3c'
-  ctx.fillRect(0, GROUND_Y + 2, W, 8)
-
-  // Score flash on milestone
-  if (score.value > 0 && score.value % 100 === 0 && frame % 20 < 10) {
-    ctx.fillStyle = '#007acc44'
-    ctx.fillRect(0, 0, W, H)
-  }
-
-  drawDino(ctx)
-  drawObstacles(ctx)
-}
-
-function drawDino(ctx: CanvasRenderingContext2D) {
-  const color = phase.value === 'dead' ? '#e74c3c' : '#4ec9b0'
-  const dark  = phase.value === 'dead' ? '#c0392b' : '#37a08a'
-  const x = DINO_X, y = dinoY
-
-  ctx.fillStyle = color
-
-  // Tail
-  ctx.beginPath()
-  ctx.moveTo(x + 6, y + DINO_H - 14)
-  ctx.lineTo(x - 6, y + DINO_H - 6)
-  ctx.lineTo(x + 2, y + DINO_H - 20)
-  ctx.fill()
-
-  // Body
-  ctx.fillRect(x + 6, y + 18, DINO_W - 14, DINO_H - 24)
-
-  // Neck + head
-  ctx.fillRect(x + 18, y + 2, DINO_W - 18, 22)
-
-  // Snout
-  ctx.fillRect(x + DINO_W - 6, y + 10, 8, 12)
-
-  // Eye
-  ctx.fillStyle = '#1e1e1e'
-  ctx.fillRect(x + DINO_W - 10, y + 6, 6, 6)
-  ctx.fillStyle = '#fff'
-  ctx.fillRect(x + DINO_W - 9, y + 7, 2, 2)
-
-  // Nostril
-  ctx.fillStyle = dark
-  ctx.fillRect(x + DINO_W, y + 14, 3, 3)
-
-  // Arm
-  ctx.fillStyle = color
-  ctx.fillRect(x + 22, y + 30, 10, 6)
-
-  // Legs
-  ctx.fillStyle = color
-  if (phase.value === 'running' && dinoY >= GROUND_Y - DINO_H - 2) {
-    const leg = Math.floor(frame / 7) % 2
-    if (leg === 0) {
-      ctx.fillRect(x + 12, y + DINO_H - 6, 9, 14)
-      ctx.fillRect(x + 9,  y + DINO_H + 6, 14, 4)
-      ctx.fillRect(x + 24, y + DINO_H - 2, 9, 10)
-    } else {
-      ctx.fillRect(x + 12, y + DINO_H - 2, 9, 10)
-      ctx.fillRect(x + 24, y + DINO_H - 6, 9, 14)
-      ctx.fillRect(x + 22, y + DINO_H + 6, 14, 4)
-    }
-  } else {
-    ctx.fillRect(x + 12, y + DINO_H - 4, 9, 12)
-    ctx.fillRect(x + 9,  y + DINO_H + 6, 14, 4)
-    ctx.fillRect(x + 24, y + DINO_H - 4, 9, 12)
-    ctx.fillRect(x + 22, y + DINO_H + 6, 14, 4)
-  }
-
-  // Dead X eyes
-  if (phase.value === 'dead') {
-    ctx.strokeStyle = '#fff'
-    ctx.lineWidth = 2
-    const ex = x + DINO_W - 10, ey = y + 6
-    ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(ex + 6, ey + 6); ctx.stroke()
-    ctx.beginPath(); ctx.moveTo(ex + 6, ey); ctx.lineTo(ex, ey + 6); ctx.stroke()
-    ctx.lineWidth = 1
-  }
-}
-
-function drawObstacles(ctx: CanvasRenderingContext2D) {
-  for (const o of obstacles) {
-    const oy = GROUND_Y - o.h
-    ctx.fillStyle = '#6a9955'
-    // Main trunk
-    ctx.fillRect(o.x, oy, o.w, o.h)
-    // Top spike
-    ctx.beginPath()
-    ctx.moveTo(o.x - 3, oy + 6)
-    ctx.lineTo(o.x + o.w / 2, oy - 8)
-    ctx.lineTo(o.x + o.w + 3, oy + 6)
-    ctx.fill()
-    // Arms
-    if (o.arms) {
-      ctx.fillStyle = '#4d7a3d'
-      ctx.fillRect(o.x - 12, GROUND_Y - o.h * 0.65, 12, 7)
-      ctx.fillRect(o.x - 12, GROUND_Y - o.h * 0.65 - 10, 7, 12)
-      ctx.fillRect(o.x + o.w, GROUND_Y - o.h * 0.55, 12, 7)
-      ctx.fillRect(o.x + o.w + 5, GROUND_Y - o.h * 0.55 - 10, 7, 12)
-    }
-  }
-}
-
-// ── Initial idle draw ────────────────────────────────────────────
-function drawIdle() {
-  const ctx = canvas.value?.getContext('2d')
-  if (!ctx) return
-  spawnClouds()
-  draw(ctx)
-}
-
-// ── Keyboard / lifecycle ─────────────────────────────────────────
 function onKey(e: KeyboardEvent) {
-  if (e.code === 'Space' || e.code === 'ArrowUp') {
-    e.preventDefault()
-    onAction()
-  }
+  if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); onAction() }
 }
 
 onMounted(() => {
   window.addEventListener('keydown', onKey)
-  drawIdle()
+  const ctx = canvas.value?.getContext('2d')
+  if (ctx) drawScene(ctx, { ...gs, score: 0, phase: 'idle' })
 })
 
 onUnmounted(() => {

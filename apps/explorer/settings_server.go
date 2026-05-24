@@ -25,32 +25,40 @@ type CommandShortcut struct {
 }
 
 type HueSettings struct {
-	ShowHidden       bool              `json:"showHidden"`
-	DateFormat       string            `json:"dateFormat"`
-	PreviewWidth     int               `json:"previewWidth"`
-	ThumbSize        int               `json:"thumbSize"`
-	Language         string            `json:"language"`
-	SortBy           string            `json:"sortBy"`
-	SortAsc          bool              `json:"sortAsc"`
-	ShowExtensions   bool              `json:"showExtensions"`
-	ConfirmDelete    bool              `json:"confirmDelete"`
-	Favorites        []string          `json:"favorites"`
-	CommandShortcuts []CommandShortcut `json:"commandShortcuts"`
+	ShowHidden        bool              `json:"showHidden"`
+	DateFormat        string            `json:"dateFormat"`
+	PreviewWidth      int               `json:"previewWidth"`
+	ThumbSize         int               `json:"thumbSize"`
+	Language          string            `json:"language"`
+	SortBy            string            `json:"sortBy"`
+	SortAsc           bool              `json:"sortAsc"`
+	ShowExtensions    bool              `json:"showExtensions"`
+	ConfirmDelete     bool              `json:"confirmDelete"`
+	Favorites         []string          `json:"favorites"`
+	CommandShortcuts  []CommandShortcut `json:"commandShortcuts"`
+	StartupMode       string            `json:"startupMode"`       // "home" | "last" | "fixed"
+	StartupFixedPath  string            `json:"startupFixedPath"`  // startupMode == "fixed" のとき使用
+	LastPath          string            `json:"lastPath"`           // startupMode == "last" のとき自動保存
+	ClickToOpen       string            `json:"clickToOpen"`       // "single" | "double"
 }
 
 func defaultHueSettings() HueSettings {
 	return HueSettings{
-		ShowHidden:       false,
-		DateFormat:       "datetime",
-		PreviewWidth:     220,
-		ThumbSize:        128,
-		Language:         "ja",
-		SortBy:           "name",
-		SortAsc:          true,
-		ShowExtensions:   true,
-		ConfirmDelete:    true,
-		Favorites:        []string{},
-		CommandShortcuts: []CommandShortcut{},
+		ShowHidden:        false,
+		DateFormat:        "datetime",
+		PreviewWidth:      220,
+		ThumbSize:         128,
+		Language:          "ja",
+		SortBy:            "name",
+		SortAsc:           true,
+		ShowExtensions:    true,
+		ConfirmDelete:     true,
+		Favorites:         []string{},
+		CommandShortcuts:  []CommandShortcut{},
+		StartupMode:       "home",
+		StartupFixedPath:  "",
+		LastPath:          "",
+		ClickToOpen:       "double",
 	}
 }
 
@@ -225,6 +233,36 @@ func startSettingsServer() {
 			persistSettings(s)
 			w.WriteHeader(http.StatusNoContent)
 		}
+	})
+
+	mux.HandleFunc("/api/settings/lastpath", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		if r.Method == http.MethodOptions {
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		var body struct{ Path string `json:"path"` }
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Path == "" {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		s := loadSettings()
+		s.LastPath = body.Path
+		// settings:changed をブロードキャストせずに保存
+		settingsMu.Lock()
+		cachedSettings = &s
+		settingsMu.Unlock()
+		p := settingsFilePath()
+		os.MkdirAll(filepath.Dir(p), 0755)
+		data, _ := json.MarshalIndent(s, "", "  ")
+		os.WriteFile(p, data, 0644)
+		w.WriteHeader(http.StatusNoContent)
 	})
 
 	mux.HandleFunc("/api/languages", func(w http.ResponseWriter, r *http.Request) {

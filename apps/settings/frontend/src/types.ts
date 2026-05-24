@@ -15,13 +15,17 @@ export interface HueSettings {
   dateFormat: 'datetime' | 'date' | 'relative'
   previewWidth: number
   thumbSize: number
-  language: 'ja' | 'en'
+  language: string
   sortBy: 'name' | 'size' | 'date'
   sortAsc: boolean
   showExtensions: boolean
   confirmDelete: boolean
   favorites: string[]
   commandShortcuts: CommandShortcut[]
+  startupMode: 'home' | 'last' | 'fixed'
+  startupFixedPath: string
+  lastPath: string
+  clickToOpen: 'single' | 'double'
 }
 
 export const defaultSettings: HueSettings = {
@@ -36,6 +40,10 @@ export const defaultSettings: HueSettings = {
   confirmDelete: true,
   favorites: [],
   commandShortcuts: [],
+  startupMode: 'home',
+  startupFixedPath: '',
+  lastPath: '',
+  clickToOpen: 'double',
 }
 
 export type SettingsSection = 'general' | 'display' | 'preview' | 'shortcuts' | 'about'

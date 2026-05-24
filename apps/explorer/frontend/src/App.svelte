@@ -5,7 +5,7 @@
            GetThumbnail, GetPreview, OpenSettings, GetSettings,
            AddFavorite, RemoveFavorite,
            GetStartupPath, OpenInNewWindow, ExecInConsole, SearchFiles,
-           LoadPlugins, RegisterLanguage } from '../wailsjs/go/main/App'
+           LoadPlugins, RegisterLanguage, SetLastPath } from '../wailsjs/go/main/App'
   import { EventsOn, OnFileDrop } from '../wailsjs/runtime/runtime'
   import TreeSidebar from './TreeSidebar.svelte'
   import ConsolePane from './ConsolePane.svelte'
@@ -297,7 +297,16 @@
     drives = await GetDrives()
     await loadPlugins()
     const startupPath = await GetStartupPath()
-    const initialPath = startupPath || await GetHomeDir()
+    let initialPath
+    if (startupPath) {
+      initialPath = startupPath
+    } else if (s.startupMode === 'last' && s.lastPath) {
+      initialPath = s.lastPath
+    } else if (s.startupMode === 'fixed' && s.startupFixedPath) {
+      initialPath = s.startupFixedPath
+    } else {
+      initialPath = await GetHomeDir()
+    }
     await navigate(initialPath)
     window.addEventListener('click', closeContextMenu)
     OnFileDrop(async (_x, _y, paths) => {
@@ -345,6 +354,7 @@
       entries = result ?? []
       currentPath = path
       error = ''
+      if (settings.startupMode === 'last') SetLastPath(path)
       if (historyIndex < history.length - 1) {
         history = history.slice(0, historyIndex + 1)
       }
@@ -401,6 +411,8 @@
       selectedPaths = new Set([entry.path])
       selectedPath = entry.path
       lastClickedPath = entry.path
+    } else if (settings.clickToOpen === 'single') {
+      await onEnter(entry)
     } else {
       await selectEntry(entry.path)
     }

@@ -10,6 +10,11 @@ export const translations = {
       language: '言語', languageDesc: 'UIの表示言語',
       confirmDelete: '削除の確認', confirmDeleteDesc: 'ファイル削除前に確認ダイアログを表示',
       showHidden: '隠しファイルの表示', showHiddenDesc: '隠し属性のファイルを表示する',
+      startupMode: '起動時のパス', startupModeDesc: '起動時に開くフォルダ',
+      startupHome: 'ホームフォルダ', startupLast: '前回開いた場所', startupFixed: '固定パス',
+      startupFixedPath: '固定パス',
+      clickToOpen: 'クリック動作', clickToOpenDesc: 'ファイル・フォルダを開くクリック数',
+      clickSingle: 'シングルクリックで開く', clickDouble: 'ダブルクリックで開く',
     },
     display: {
       title: '表示',
@@ -61,6 +66,11 @@ export const translations = {
       language: 'Language', languageDesc: 'UI display language',
       confirmDelete: 'Confirm Delete', confirmDeleteDesc: 'Show confirmation dialog before deleting files',
       showHidden: 'Show Hidden Files', showHiddenDesc: 'Show files with the hidden attribute',
+      startupMode: 'Startup Folder', startupModeDesc: 'Folder to open on startup',
+      startupHome: 'Home folder', startupLast: 'Last visited', startupFixed: 'Fixed path',
+      startupFixedPath: 'Fixed path',
+      clickToOpen: 'Click to Open', clickToOpenDesc: 'Number of clicks to open files and folders',
+      clickSingle: 'Single click', clickDouble: 'Double click',
     },
     display: {
       title: 'Display',

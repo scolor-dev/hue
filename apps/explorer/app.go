@@ -325,6 +325,11 @@ func goListDirectory(path string) ([]FileEntry, error) {
 	return files, nil
 }
 
+func (a *App) SetLastPath(path string) {
+	data, _ := json.Marshal(map[string]string{"path": path})
+	http.Post("http://127.0.0.1:9271/api/settings/lastpath", "application/json", bytes.NewReader(data))
+}
+
 func (a *App) RegisterLanguage(locale, displayName string) {
 	data, _ := json.Marshal(map[string]string{"value": locale, "label": displayName})
 	http.Post("http://127.0.0.1:9271/api/languages", "application/json", bytes.NewReader(data))

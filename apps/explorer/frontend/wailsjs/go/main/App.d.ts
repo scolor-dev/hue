@@ -50,4 +50,6 @@ export function LoadPlugins():Promise<Array<main.PluginInfo>>;
 
 export function RegisterLanguage(arg1:string,arg2:string):Promise<void>;
 
+export function SetLastPath(arg1:string):Promise<void>;
+
 export function SearchFiles(arg1:string,arg2:string):Promise<Array<main.SearchEntry>>;

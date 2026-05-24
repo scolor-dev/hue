@@ -44,6 +44,31 @@ function update<K extends keyof HueSettings>(key: K, value: HueSettings[K]) {
       </select>
     </SettingRow>
 
+    <SettingRow :label="t.general.startupMode" :description="t.general.startupModeDesc">
+      <select :value="settings.startupMode" @change="update('startupMode', ($event.target as HTMLSelectElement).value as HueSettings['startupMode'])">
+        <option value="home">{{ t.general.startupHome }}</option>
+        <option value="last">{{ t.general.startupLast }}</option>
+        <option value="fixed">{{ t.general.startupFixed }}</option>
+      </select>
+    </SettingRow>
+
+    <SettingRow v-if="settings.startupMode === 'fixed'" :label="t.general.startupFixedPath" description="">
+      <input
+        type="text"
+        :value="settings.startupFixedPath"
+        @change="update('startupFixedPath', ($event.target as HTMLInputElement).value)"
+        placeholder="C:\Users\..."
+        class="path-input"
+      />
+    </SettingRow>
+
+    <SettingRow :label="t.general.clickToOpen" :description="t.general.clickToOpenDesc">
+      <select :value="settings.clickToOpen" @change="update('clickToOpen', ($event.target as HTMLSelectElement).value as HueSettings['clickToOpen'])">
+        <option value="double">{{ t.general.clickDouble }}</option>
+        <option value="single">{{ t.general.clickSingle }}</option>
+      </select>
+    </SettingRow>
+
     <SettingRow :label="t.general.confirmDelete" :description="t.general.confirmDeleteDesc">
       <ToggleSwitch
         :model-value="settings.confirmDelete"
@@ -69,4 +94,15 @@ select {
   padding: 3px 8px;
   border-radius: 4px;
 }
+.path-input {
+  background: #3c3c3c;
+  border: 1px solid #555;
+  color: #d4d4d4;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-family: 'Consolas', monospace;
+  font-size: 12px;
+  width: 240px;
+}
+.path-input:focus { outline: none; border-color: #007acc; }
 </style>

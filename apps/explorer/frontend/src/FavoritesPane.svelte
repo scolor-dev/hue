@@ -97,7 +97,7 @@
   .section-label {
     font-size: 11px;
     font-weight: 600;
-    color: #858585;
+    color: var(--hue-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.08em;
     padding: 8px 12px 4px;
@@ -117,15 +117,15 @@
     outline: none;
   }
 
-  .fav-row:hover { background: #2a2d2e; }
-  .fav-row:focus-visible { outline: 1px solid #007acc; outline-offset: -1px; }
-  .fav-row.selected { background: #094771; }
+  .fav-row:hover { background: rgba(255,255,255,0.05); }
+  .fav-row:focus-visible { outline: 1px solid var(--hue-accent); outline-offset: -1px; }
+  .fav-row.selected { background: var(--hue-accent-dim); }
 
   .fav-icon { font-size: 13px; flex-shrink: 0; }
 
   .fav-name {
     font-size: 12px;
-    color: #cccccc;
+    color: var(--hue-text);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -136,13 +136,13 @@
 
   .section-sep {
     height: 1px;
-    background: #3c3c3c;
+    background: var(--hue-border);
     margin: 6px 8px;
   }
 
   .fav-ctx-menu {
     position: fixed;
-    background: #2d2d2d;
+    background: var(--hue-bg-panel);
     border: 1px solid #454545;
     border-radius: 4px;
     padding: 4px 0;
@@ -157,18 +157,18 @@
     padding: 5px 16px;
     background: transparent;
     border: none;
-    color: #d4d4d4;
+    color: var(--hue-text);
     font-size: 13px;
     cursor: pointer;
     text-align: left;
   }
 
-  .fav-ctx-menu button:hover { background: #094771; }
+  .fav-ctx-menu button:hover { background: var(--hue-accent-dim); }
   .fav-ctx-menu button.danger:hover { background: #6b1c1c; color: #f48771; }
 
   .fav-ctx-menu hr {
     border: none;
-    border-top: 1px solid #3c3c3c;
+    border-top: 1px solid var(--hue-border);
     margin: 3px 0;
   }
 </style>

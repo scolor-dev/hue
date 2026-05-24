@@ -89,6 +89,8 @@ export namespace main {
 	    lastPath: string;
 	    clickToOpen: string;
 	    disabledPlugins: string[];
+	    themePreset: string;
+	    accentColor: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new HueSettings(source);
@@ -112,6 +114,8 @@ export namespace main {
 	        this.lastPath = source["lastPath"];
 	        this.clickToOpen = source["clickToOpen"];
 	        this.disabledPlugins = source["disabledPlugins"];
+	        this.themePreset = source["themePreset"];
+	        this.accentColor = source["accentColor"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

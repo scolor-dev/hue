@@ -27,6 +27,8 @@ export interface HueSettings {
   lastPath: string
   clickToOpen: 'single' | 'double'
   disabledPlugins: string[]
+  themePreset: string
+  accentColor: string
 }
 
 export const defaultSettings: HueSettings = {
@@ -46,6 +48,8 @@ export const defaultSettings: HueSettings = {
   lastPath: '',
   clickToOpen: 'double',
   disabledPlugins: [],
+  themePreset: 'dark',
+  accentColor: '',
 }
 
-export type SettingsSection = 'general' | 'display' | 'preview' | 'shortcuts' | 'plugins' | 'keymap' | 'about'
+export type SettingsSection = 'general' | 'display' | 'preview' | 'shortcuts' | 'plugins' | 'keymap' | 'theme' | 'about'

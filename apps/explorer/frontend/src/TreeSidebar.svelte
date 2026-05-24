@@ -115,7 +115,7 @@
   }
 
   .tree-sidebar {
-    background: #252526;
+    background: var(--hue-bg-panel);
     overflow-y: auto;
     overflow-x: hidden;
     display: flex;
@@ -128,7 +128,7 @@
   .sidebar-title {
     font-size: 11px;
     font-weight: 600;
-    color: #858585;
+    color: var(--hue-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.08em;
     padding: 8px 12px 6px;
@@ -139,13 +139,13 @@
   .sidebar-resizer {
     width: 4px;
     flex-shrink: 0;
-    background: #3c3c3c;
+    background: var(--hue-border);
     cursor: col-resize;
     transition: background 0.15s;
   }
 
   .sidebar-resizer:hover,
-  .sidebar-resizer.active { background: #007acc; }
+  .sidebar-resizer.active { background: var(--hue-accent); }
 
   .drive-entry { display: flex; flex-direction: column; }
 
@@ -159,14 +159,14 @@
   .drive-bar {
     flex: 1;
     height: 3px;
-    background: #3c3c3c;
+    background: var(--hue-border);
     border-radius: 2px;
     overflow: hidden;
   }
 
   .drive-bar-used {
     height: 100%;
-    background: #007acc;
+    background: var(--hue-accent);
     border-radius: 2px;
     transition: width 0.3s;
   }

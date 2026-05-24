@@ -11,6 +11,7 @@
 *.svelte linguist-language=Svelte
 *.zig linguist-language=Zig
 *.js linguist-language=JavaScript
+*.md.js linguist-language=JavaScript
 *.vue linguist-language=Vue
 *.go linguist-language=Go
 *.ts linguist-language=TypeScript

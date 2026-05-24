@@ -1,7 +1,22 @@
-# GitHub Linguist overrides
+# GitHub Linguist — language whitelist
+# Counted: Svelte / Zig / JavaScript / Vue / Go / TypeScript / Elixir
+
+# ---- force-detect --------------------------------------------------------
+
+# JS plugin examples (examples/ dir is excluded by Linguist by default)
 examples/plugins/*.js linguist-language=JavaScript
 examples/plugins/*.js linguist-detectable=true
 examples/plugins/*.js linguist-vendored=false
 
-apps/explorer/frontend/dist/**    linguist-vendored=true
-apps/settings/frontend/dist/**    linguist-vendored=true
+# ---- exclude: Wails build artifacts (NSIS, plist, manifest, ico ...) ----
+apps/explorer/build/**                     linguist-vendored=true
+
+# ---- exclude: auto-generated Wails JS runtime ---------------------------
+apps/explorer/frontend/wailsjs/runtime/**  linguist-vendored=true
+
+# ---- exclude: frontend build output -------------------------------------
+apps/explorer/frontend/dist/**             linguist-vendored=true
+apps/settings/frontend/dist/**             linguist-vendored=true
+
+# ---- exclude: build scripts ---------------------------------------------
+build.ps1                                  linguist-detectable=false

@@ -30,7 +30,6 @@ docs/** linguist-detectable=true
 
 # Wails build output
 apps/explorer/build/** linguist-vendored=true
-
 # Docs
 examples/** linguist-vendored=true
 docs/** linguist-vendored=true
@@ -38,6 +37,7 @@ docs/** linguist-vendored=true
 # Frontend dist output
 apps/explorer/frontend/dist/** linguist-vendored=true
 apps/settings/frontend/dist/** linguist-vendored=true
+apps/explorer/frontend/wailsjs/runtime/** linguist-vendored=true
 
 # Svelte build cache
 .svelte-kit/** linguist-vendored=true

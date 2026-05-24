@@ -6,3 +6,4 @@ bin/
 .zig-cache
 *.exe
 *.zip
+.vite/

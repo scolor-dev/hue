@@ -30,13 +30,14 @@ docs/** linguist-detectable=true
 
 # Wails build output
 apps/explorer/build/** linguist-vendored=true
+
 # Docs
-examples/** linguist-vendored=true
-docs/** linguist-vendored=true
+examples/** linguist-vendored=false
+docs/** linguist-vendored=false
 
 # Frontend dist output
-apps/explorer/frontend/dist/** linguist-vendored=true
-apps/settings/frontend/dist/** linguist-vendored=true
+apps/explorer/frontend/dist/** linguist-vendored=false
+apps/settings/frontend/dist/** linguist-vendored=false
 apps/explorer/frontend/wailsjs/runtime/** linguist-vendored=true
 
 # Svelte build cache

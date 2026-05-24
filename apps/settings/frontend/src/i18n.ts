@@ -4,7 +4,7 @@ export const translations = {
   ja: {
     settings: '設定',
     saved: '保存しました',
-    nav: { general: '一般', display: '表示', preview: 'プレビュー', shortcuts: 'ショートカット', about: 'バージョン情報' },
+    nav: { general: '一般', display: '表示', preview: 'プレビュー', shortcuts: 'ショートカット', plugins: 'プラグイン', keymap: 'キー一覧', about: 'バージョン情報' },
     general: {
       title: '一般',
       language: '言語', languageDesc: 'UIの表示言語',
@@ -42,6 +42,23 @@ export const translations = {
       promptMessage: '入力メッセージ', promptPlaceholder: 'プレースホルダー',
       empty: 'ショートカットがありません',
     },
+    keymap: {
+      title: 'キーボードショートカット',
+      builtin: '組み込み',
+      plugin: 'プラグイン',
+      key: 'キー',
+      action: '操作',
+      description: '説明',
+      noPlugin: 'プラグインのショートカットはありません',
+    },
+    plugins: {
+      title: 'プラグイン',
+      empty: 'プラグインがありません',
+      emptyHint: 'plugins/ フォルダに .js ファイルを置いてください',
+      enabled: '有効',
+      disabled: '無効',
+      deleteConfirm: (name: string) => `「${name}」を削除しますか？`,
+    },
     about: {
       title: 'バージョン情報',
       appDesc: 'AI-powered Windows ファイルマネージャー',
@@ -60,7 +77,7 @@ export const translations = {
   en: {
     settings: 'Settings',
     saved: 'Saved',
-    nav: { general: 'General', display: 'Display', preview: 'Preview', shortcuts: 'Shortcuts', about: 'About' },
+    nav: { general: 'General', display: 'Display', preview: 'Preview', shortcuts: 'Shortcuts', plugins: 'Plugins', keymap: 'Key Map', about: 'About' },
     general: {
       title: 'General',
       language: 'Language', languageDesc: 'UI display language',
@@ -97,6 +114,23 @@ export const translations = {
       promptEnabled: 'Ask for additional input',
       promptMessage: 'Prompt message', promptPlaceholder: 'Placeholder text',
       empty: 'No shortcuts yet',
+    },
+    keymap: {
+      title: 'Keyboard Shortcuts',
+      builtin: 'Built-in',
+      plugin: 'Plugins',
+      key: 'Key',
+      action: 'Action',
+      description: 'Description',
+      noPlugin: 'No plugin shortcuts registered',
+    },
+    plugins: {
+      title: 'Plugins',
+      empty: 'No plugins installed',
+      emptyHint: 'Place .js files in the plugins/ folder',
+      enabled: 'Enabled',
+      disabled: 'Disabled',
+      deleteConfirm: (name: string) => `Delete "${name}"?`,
     },
     about: {
       title: 'About',

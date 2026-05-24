@@ -325,6 +325,11 @@ func goListDirectory(path string) ([]FileEntry, error) {
 	return files, nil
 }
 
+func (a *App) RegisterShortcut(key, label, description string) {
+	data, _ := json.Marshal(map[string]string{"key": key, "label": label, "description": description})
+	http.Post("http://127.0.0.1:9271/api/shortcuts", "application/json", bytes.NewReader(data))
+}
+
 func (a *App) SetLastPath(path string) {
 	data, _ := json.Marshal(map[string]string{"path": path})
 	http.Post("http://127.0.0.1:9271/api/settings/lastpath", "application/json", bytes.NewReader(data))
@@ -343,6 +348,11 @@ type PluginInfo struct {
 }
 
 func (a *App) LoadPlugins() []PluginInfo {
+	s := fetchSettings()
+	disabled := map[string]bool{}
+	for _, n := range s.DisabledPlugins {
+		disabled[n] = true
+	}
 	dirs := pluginDirs()
 	seen := map[string]bool{}
 	var plugins []PluginInfo
@@ -352,7 +362,8 @@ func (a *App) LoadPlugins() []PluginInfo {
 			continue
 		}
 		for _, e := range entries {
-			if e.IsDir() || !strings.HasSuffix(e.Name(), ".js") || seen[e.Name()] {
+			name := strings.TrimSuffix(e.Name(), ".js")
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".js") || seen[e.Name()] || disabled[name] {
 				continue
 			}
 			code, err := os.ReadFile(filepath.Join(dir, e.Name()))
@@ -361,7 +372,7 @@ func (a *App) LoadPlugins() []PluginInfo {
 			}
 			seen[e.Name()] = true
 			plugins = append(plugins, PluginInfo{
-				Name: strings.TrimSuffix(e.Name(), ".js"),
+				Name: name,
 				Code: string(code),
 			})
 		}

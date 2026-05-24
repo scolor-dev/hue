@@ -26,6 +26,7 @@ export interface HueSettings {
   startupFixedPath: string
   lastPath: string
   clickToOpen: 'single' | 'double'
+  disabledPlugins: string[]
 }
 
 export const defaultSettings: HueSettings = {
@@ -44,6 +45,7 @@ export const defaultSettings: HueSettings = {
   startupFixedPath: '',
   lastPath: '',
   clickToOpen: 'double',
+  disabledPlugins: [],
 }
 
-export type SettingsSection = 'general' | 'display' | 'preview' | 'shortcuts' | 'about'
+export type SettingsSection = 'general' | 'display' | 'preview' | 'shortcuts' | 'plugins' | 'keymap' | 'about'

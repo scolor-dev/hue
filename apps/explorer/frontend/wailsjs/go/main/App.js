@@ -98,6 +98,10 @@ export function RegisterLanguage(arg1, arg2) {
   return window['go']['main']['App']['RegisterLanguage'](arg1, arg2);
 }
 
+export function RegisterShortcut(arg1, arg2, arg3) {
+  return window['go']['main']['App']['RegisterShortcut'](arg1, arg2, arg3);
+}
+
 export function SetLastPath(arg1) {
   return window['go']['main']['App']['SetLastPath'](arg1);
 }

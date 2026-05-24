@@ -5,7 +5,7 @@
            GetThumbnail, GetPreview, OpenSettings, GetSettings,
            AddFavorite, RemoveFavorite,
            GetStartupPath, OpenInNewWindow, ExecInConsole, SearchFiles,
-           LoadPlugins, RegisterLanguage, SetLastPath } from '../wailsjs/go/main/App'
+           LoadPlugins, RegisterLanguage, SetLastPath, RegisterShortcut } from '../wailsjs/go/main/App'
   import { EventsOn, OnFileDrop } from '../wailsjs/runtime/runtime'
   import TreeSidebar from './TreeSidebar.svelte'
   import ConsolePane from './ConsolePane.svelte'
@@ -210,7 +210,18 @@
   }
 
   // プラグイン
-  let pluginMenuItems = [] // { label, icon?, match?, action }
+  let pluginMenuItems = []   // { label, icon?, match?, action }
+  let pluginShortcuts = []   // { key, label, description?, action, _parsed }
+
+  function parseShortcutKey(combo) {
+    const parts = combo.toLowerCase().split('+')
+    return {
+      ctrl:  parts.includes('ctrl'),
+      shift: parts.includes('shift'),
+      alt:   parts.includes('alt'),
+      key:   parts.find(p => !['ctrl','shift','alt','meta'].includes(p)) ?? '',
+    }
+  }
 
   function setupHueAPI() {
     window.hue = {
@@ -221,6 +232,12 @@
         register(locale, translations, displayName) {
           tr = { ...tr, [locale]: translations }
           RegisterLanguage(locale, displayName ?? locale)
+        }
+      },
+      shortcuts: {
+        add(item) {
+          pluginShortcuts = [...pluginShortcuts, { ...item, _parsed: parseShortcutKey(item.key) }]
+          RegisterShortcut(item.key, item.label, item.description ?? '')
         }
       },
       exec(command) {
@@ -526,6 +543,17 @@
       renamingPath = ''
       creatingFolder = false
       creatingFile = false
+    } else {
+      const entry = activeList.find(e => e.path === selectedPath) ?? null
+      for (const sc of pluginShortcuts) {
+        const p = sc._parsed
+        if (e.ctrlKey === p.ctrl && e.shiftKey === p.shift && e.altKey === p.alt
+            && e.key.toLowerCase() === p.key) {
+          e.preventDefault()
+          sc.action(entry)
+          return
+        }
+      }
     }
   }
 

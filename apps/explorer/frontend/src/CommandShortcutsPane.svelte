@@ -6,22 +6,46 @@
   export let label = 'ショートカット'
 
   let promptingId = null
-  let promptInput = ''
+  let promptInputs = {}
   let runningId = null
+
+  function parseFields(command) {
+    const seen = new Set()
+    const fields = []
+    for (const m of (command || '').matchAll(/\{input(?::([^}]*))?\}/g)) {
+      if (!seen.has(m[0])) {
+        seen.add(m[0])
+        fields.push({ key: m[0], label: m[1] || '' })
+      }
+    }
+    return fields.length > 0 ? fields : [{ key: '{input}', label: '' }]
+  }
 
   function handleClick(sc) {
     if (sc.promptEnabled) {
-      promptingId = promptingId === sc.id ? null : sc.id
-      promptInput = ''
+      if (promptingId === sc.id) {
+        promptingId = null
+        promptInputs = {}
+      } else {
+        promptingId = sc.id
+        promptInputs = Object.fromEntries(parseFields(sc.command).map(f => [f.key, '']))
+      }
     } else {
-      run(sc, '')
+      run(sc)
     }
   }
 
-  async function run(sc, extra) {
+  async function run(sc) {
     runningId = sc.id
+    const fields = parseFields(sc.command)
+    let extra
+    if (fields.length === 1 && fields[0].key === '{input}') {
+      extra = promptInputs['{input}'] || ''
+    } else {
+      extra = JSON.stringify(Object.fromEntries(fields.map(f => [f.key, promptInputs[f.key] || ''])))
+    }
     promptingId = null
-    promptInput = ''
+    promptInputs = {}
     try {
       await RunCommandShortcut(sc.id, currentPath, extra)
     } catch(e) {
@@ -30,9 +54,9 @@
     runningId = null
   }
 
-  function handlePromptKey(e, sc) {
-    if (e.key === 'Enter') run(sc, promptInput)
-    if (e.key === 'Escape') { promptingId = null; promptInput = '' }
+  function handleKey(e, sc, isLast) {
+    if (e.key === 'Enter' && isLast) run(sc)
+    if (e.key === 'Escape') { promptingId = null; promptInputs = {} }
     e.stopPropagation()
   }
 </script>
@@ -57,20 +81,28 @@
         </button>
 
         {#if promptingId === sc.id}
+          {@const fields = parseFields(sc.command)}
           <div class="sc-prompt">
             {#if sc.promptMessage}
               <div class="sc-prompt-msg">{sc.promptMessage}</div>
             {/if}
-            <div class="sc-prompt-row">
-              <input
-                class="sc-input"
-                placeholder={sc.promptPlaceholder || ''}
-                bind:value={promptInput}
-                on:keydown={(e) => handlePromptKey(e, sc)}
-                autofocus
-              />
-              <button class="sc-run-btn" on:click={() => run(sc, promptInput)}>▶</button>
-            </div>
+            {#each fields as field, i}
+              {#if field.label}
+                <div class="sc-field-label">{field.label}</div>
+              {/if}
+              <div class="sc-prompt-row" style={i < fields.length - 1 ? 'margin-bottom:4px' : ''}>
+                <input
+                  class="sc-input"
+                  placeholder={field.label || sc.promptPlaceholder || ''}
+                  bind:value={promptInputs[field.key]}
+                  on:keydown={(e) => handleKey(e, sc, i === fields.length - 1)}
+                  autofocus={i === 0}
+                />
+                {#if i === fields.length - 1}
+                  <button class="sc-run-btn" on:click={() => run(sc)}>▶</button>
+                {/if}
+              </div>
+            {/each}
           </div>
         {/if}
       </div>
@@ -131,6 +163,13 @@
     font-size: 11px;
     color: var(--hue-text-muted);
     margin-bottom: 4px;
+    padding: 0 2px;
+  }
+
+  .sc-field-label {
+    font-size: 10px;
+    color: var(--hue-text-muted);
+    margin-bottom: 2px;
     padding: 0 2px;
   }
 

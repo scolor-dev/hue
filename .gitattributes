@@ -8,6 +8,11 @@ examples/plugins/*.js linguist-language=JavaScript
 examples/plugins/*.js linguist-detectable=true
 examples/plugins/*.js linguist-vendored=false
 
+# docs/*.md.js — Markdown content with .js extension for language stats
+docs/*.md.js linguist-language=JavaScript
+docs/*.md.js linguist-detectable=true
+docs/*.md.js linguist-documentation=false
+
 # ---- exclude: Wails build artifacts (NSIS, plist, manifest, ico ...) ----
 apps/explorer/build/**                     linguist-vendored=true
 

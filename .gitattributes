@@ -1,0 +1,8 @@
+# GitHub Linguist overrides
+examples/plugins/*.js linguist-language=JavaScript
+examples/plugins/*.js linguist-detectable=true
+examples/plugins/*.js linguist-vendored=false
+
+apps/explorer/frontend/wailsjs/** linguist-vendored=true
+apps/explorer/frontend/dist/**    linguist-vendored=true
+apps/settings/frontend/dist/**    linguist-vendored=true

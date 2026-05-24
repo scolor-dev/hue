@@ -21,8 +21,16 @@
 # Include normally ignored directories
 # ---------------------------------------------------------
 
+# Docs
 examples/** linguist-detectable=true
 docs/** linguist-detectable=true
+
+# Frontend dist output
+apps/explorer/frontend/dist/** linguist-detectable=true
+apps/settings/frontend/dist/** linguist-detectable=true
+
+# ###
+**/*d.* linguist-detectable=true
 
 # ---------------------------------------------------------
 # Exclude ONLY build artifacts
@@ -31,13 +39,7 @@ docs/** linguist-detectable=true
 # Wails build output
 apps/explorer/build/** linguist-vendored=true
 
-# Docs
-examples/** linguist-vendored=false
-docs/** linguist-vendored=false
-
 # Frontend dist output
-apps/explorer/frontend/dist/** linguist-vendored=false
-apps/settings/frontend/dist/** linguist-vendored=false
 apps/explorer/frontend/wailsjs/runtime/** linguist-vendored=true
 
 # Svelte build cache

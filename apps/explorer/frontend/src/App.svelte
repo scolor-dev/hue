@@ -4,7 +4,9 @@
            DeleteItem, RenameItem, CreateFolder, CreateFile, CopyItem, MoveItem,
            GetThumbnail, GetPreview, OpenSettings, GetSettings,
            AddFavorite, RemoveFavorite,
-           GetStartupPath, OpenInNewWindow, ExecInConsole, SearchFiles } from '../wailsjs/go/main/App'
+           GetStartupPath, OpenInNewWindow, ExecInConsole, SearchFiles,
+           LoadPlugins, RegisterLanguage, SetLastPath, RegisterShortcut,
+           ReportPluginError } from '../wailsjs/go/main/App'
   import { EventsOn, OnFileDrop } from '../wailsjs/runtime/runtime'
   import TreeSidebar from './TreeSidebar.svelte'
   import ConsolePane from './ConsolePane.svelte'
@@ -42,7 +44,7 @@
   const IMG_EXTS = new Set(['.jpg','.jpeg','.png','.gif','.webp','.bmp','.tiff','.ico'])
 
   // 翻訳
-  const tr = {
+  let tr = {
     ja: {
       sidebarLabel: 'フォルダ',
       shortcutsLabel: 'ショートカット',
@@ -208,6 +210,70 @@
     consoleLines = [...consoleLines, { id: consoleSeq++, type, text }]
   }
 
+  // プラグイン
+  let pluginMenuItems = []   // { label, icon?, match?, action }
+  let pluginShortcuts = []   // { key, label, description?, action, _parsed }
+
+  function parseShortcutKey(combo) {
+    const parts = combo.toLowerCase().split('+')
+    return {
+      ctrl:  parts.includes('ctrl'),
+      shift: parts.includes('shift'),
+      alt:   parts.includes('alt'),
+      key:   parts.find(p => !['ctrl','shift','alt','meta'].includes(p)) ?? '',
+    }
+  }
+
+  function setupHueAPI() {
+    window.hue = {
+      contextMenu: {
+        add(item) { pluginMenuItems = [...pluginMenuItems, item] }
+      },
+      i18n: {
+        register(locale, translations, displayName) {
+          tr = { ...tr, [locale]: translations }
+          RegisterLanguage(locale, displayName ?? locale)
+        }
+      },
+      shortcuts: {
+        add(item) {
+          pluginShortcuts = [...pluginShortcuts, { ...item, _parsed: parseShortcutKey(item.key) }]
+          RegisterShortcut(item.key, item.label, item.description ?? '')
+        }
+      },
+      exec(command) {
+        consoleCwd = currentPath
+        consoleVisible = true
+        consoleRunning = true
+        consolePush('system', `> ${command}`)
+        ExecInConsole(currentPath, command)
+      },
+      open(path) { OpenFile(path) },
+      refresh() { refresh() },
+      get currentPath() { return currentPath },
+    }
+  }
+
+  async function loadPlugins() {
+    setupHueAPI()
+    try {
+      const plugins = await LoadPlugins()
+      const failed = []
+      for (const p of plugins) {
+        try { new Function(p.code)() }
+        catch (e) {
+          const msg = e instanceof Error ? e.message : String(e)
+          console.error(`[plugin:${p.name}]`, e)
+          ReportPluginError(p.name, msg)
+          failed.push(p.name)
+        }
+      }
+      if (failed.length > 0) {
+        error = `プラグインエラー: ${failed.join(', ')} — 設定 > プラグインで詳細を確認`
+      }
+    } catch {}
+  }
+
   // ドラッグ＆ドロップ
   let dropOver = false
 
@@ -256,8 +322,18 @@
     const s = await GetSettings()
     await applySettings(s)
     drives = await GetDrives()
+    await loadPlugins()
     const startupPath = await GetStartupPath()
-    const initialPath = startupPath || await GetHomeDir()
+    let initialPath
+    if (startupPath) {
+      initialPath = startupPath
+    } else if (s.startupMode === 'last' && s.lastPath) {
+      initialPath = s.lastPath
+    } else if (s.startupMode === 'fixed' && s.startupFixedPath) {
+      initialPath = s.startupFixedPath
+    } else {
+      initialPath = await GetHomeDir()
+    }
     await navigate(initialPath)
     window.addEventListener('click', closeContextMenu)
     OnFileDrop(async (_x, _y, paths) => {
@@ -305,6 +381,7 @@
       entries = result ?? []
       currentPath = path
       error = ''
+      if (settings.startupMode === 'last') SetLastPath(path)
       if (historyIndex < history.length - 1) {
         history = history.slice(0, historyIndex + 1)
       }
@@ -361,6 +438,8 @@
       selectedPaths = new Set([entry.path])
       selectedPath = entry.path
       lastClickedPath = entry.path
+    } else if (settings.clickToOpen === 'single') {
+      await onEnter(entry)
     } else {
       await selectEntry(entry.path)
     }
@@ -474,6 +553,17 @@
       renamingPath = ''
       creatingFolder = false
       creatingFile = false
+    } else {
+      const entry = activeList.find(e => e.path === selectedPath) ?? null
+      for (const sc of pluginShortcuts) {
+        const p = sc._parsed
+        if (e.ctrlKey === p.ctrl && e.shiftKey === p.shift && e.altKey === p.alt
+            && e.key.toLowerCase() === p.key) {
+          e.preventDefault()
+          sc.action(entry)
+          return
+        }
+      }
     }
   }
 
@@ -929,6 +1019,15 @@
           {t.rename} <span class="shortcut">F2</span>
         </button>
       {/if}
+      {#if pluginMenuItems.filter(item => item.match?.(contextMenu.target) ?? true).length > 0}
+        <hr />
+        {#each pluginMenuItems.filter(item => item.match?.(contextMenu.target) ?? true) as item}
+          <button on:click={() => { item.action(contextMenu.target); closeContextMenu() }}>
+            {item.icon ? item.icon + ' ' : ''}{item.label}
+          </button>
+        {/each}
+      {/if}
+      <hr />
       <button class="danger" on:click={() => { doDelete(contextMenu.paths); closeContextMenu() }}>
         {t.delete}{contextMenu.paths.length > 1 ? ` (${contextMenu.paths.length})` : ''} <span class="shortcut">Del</span>
       </button>

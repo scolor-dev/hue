@@ -58,6 +58,10 @@ export function ListDirectory(arg1) {
   return window['go']['main']['App']['ListDirectory'](arg1);
 }
 
+export function LoadPlugins() {
+  return window['go']['main']['App']['LoadPlugins']();
+}
+
 export function MoveItem(arg1, arg2) {
   return window['go']['main']['App']['MoveItem'](arg1, arg2);
 }
@@ -74,12 +78,24 @@ export function OpenSettings() {
   return window['go']['main']['App']['OpenSettings']();
 }
 
+export function RegisterLanguage(arg1, arg2) {
+  return window['go']['main']['App']['RegisterLanguage'](arg1, arg2);
+}
+
+export function RegisterShortcut(arg1, arg2, arg3) {
+  return window['go']['main']['App']['RegisterShortcut'](arg1, arg2, arg3);
+}
+
 export function RemoveFavorite(arg1) {
   return window['go']['main']['App']['RemoveFavorite'](arg1);
 }
 
 export function RenameItem(arg1, arg2) {
   return window['go']['main']['App']['RenameItem'](arg1, arg2);
+}
+
+export function ReportPluginError(arg1, arg2) {
+  return window['go']['main']['App']['ReportPluginError'](arg1, arg2);
 }
 
 export function RunCommandShortcut(arg1, arg2, arg3) {
@@ -92,4 +108,8 @@ export function SaveSettings(arg1) {
 
 export function SearchFiles(arg1, arg2) {
   return window['go']['main']['App']['SearchFiles'](arg1, arg2);
+}
+
+export function SetLastPath(arg1) {
+  return window['go']['main']['App']['SetLastPath'](arg1);
 }

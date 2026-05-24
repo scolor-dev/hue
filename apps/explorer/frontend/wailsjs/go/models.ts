@@ -84,6 +84,11 @@ export namespace main {
 	    confirmDelete: boolean;
 	    favorites: string[];
 	    commandShortcuts: CommandShortcut[];
+	    startupMode: string;
+	    startupFixedPath: string;
+	    lastPath: string;
+	    clickToOpen: string;
+	    disabledPlugins: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new HueSettings(source);
@@ -102,6 +107,11 @@ export namespace main {
 	        this.confirmDelete = source["confirmDelete"];
 	        this.favorites = source["favorites"];
 	        this.commandShortcuts = this.convertValues(source["commandShortcuts"], CommandShortcut);
+	        this.startupMode = source["startupMode"];
+	        this.startupFixedPath = source["startupFixedPath"];
+	        this.lastPath = source["lastPath"];
+	        this.clickToOpen = source["clickToOpen"];
+	        this.disabledPlugins = source["disabledPlugins"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -121,6 +131,20 @@ export namespace main {
 		    }
 		    return a;
 		}
+	}
+	export class PluginInfo {
+	    name: string;
+	    code: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PluginInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.code = source["code"];
+	    }
 	}
 	export class SearchEntry {
 	    name: string;

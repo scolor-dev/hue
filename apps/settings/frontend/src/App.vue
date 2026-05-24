@@ -9,6 +9,8 @@ import GeneralSettings from './components/GeneralSettings.vue'
 import DisplaySettings from './components/DisplaySettings.vue'
 import PreviewSettings from './components/PreviewSettings.vue'
 import CommandShortcutsSettings from './components/CommandShortcutsSettings.vue'
+import PluginsSettings from './components/PluginsSettings.vue'
+import KeymapSection from './components/KeymapSection.vue'
 import AboutSection from './components/AboutSection.vue'
 
 const settings = ref({ ...defaultSettings })
@@ -32,6 +34,8 @@ const navSections: { id: SettingsSection; icon: string }[] = [
   { id: 'display',   icon: '👁' },
   { id: 'preview',   icon: '🖼' },
   { id: 'shortcuts', icon: '⚡' },
+  { id: 'plugins',   icon: '🧩' },
+  { id: 'keymap',    icon: '⌨' },
   { id: 'about',     icon: 'ℹ' },
 ]
 </script>
@@ -78,6 +82,16 @@ const navSections: { id: SettingsSection; icon: string }[] = [
         :settings="settings"
         :lang="settings.language"
         @change="onChange"
+      />
+      <PluginsSettings
+        v-else-if="activeSection === 'plugins'"
+        :settings="settings"
+        :lang="settings.language"
+        @change="onChange"
+      />
+      <KeymapSection
+        v-else-if="activeSection === 'keymap'"
+        :lang="settings.language"
       />
       <AboutSection v-else-if="activeSection === 'about'" :lang="settings.language" />
     </main>

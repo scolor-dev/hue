@@ -54,13 +54,41 @@ func defaultHueSettings() HueSettings {
 	}
 }
 
+type LanguageOption struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+}
+
 var (
 	settingsMu     sync.RWMutex
 	cachedSettings *HueSettings
 
 	sseMu      sync.Mutex
 	sseClients = make(map[chan struct{}]struct{})
+
+	languagesMu sync.RWMutex
+	extraLanguages = []LanguageOption{}
 )
+
+func builtinLanguages() []LanguageOption {
+	return []LanguageOption{
+		{Value: "ja", Label: "日本語"},
+		{Value: "en", Label: "English"},
+	}
+}
+
+func allLanguages() []LanguageOption {
+	languagesMu.RLock()
+	defer languagesMu.RUnlock()
+	result := builtinLanguages()
+	builtinSet := map[string]bool{"ja": true, "en": true}
+	for _, l := range extraLanguages {
+		if !builtinSet[l.Value] {
+			result = append(result, l)
+		}
+	}
+	return result
+}
 
 func settingsFilePath() string {
 	dir, _ := os.UserConfigDir()
@@ -195,6 +223,39 @@ func startSettingsServer() {
 				return
 			}
 			persistSettings(s)
+			w.WriteHeader(http.StatusNoContent)
+		}
+	})
+
+	mux.HandleFunc("/api/languages", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		switch r.Method {
+		case http.MethodOptions:
+			w.WriteHeader(http.StatusNoContent)
+		case http.MethodGet:
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(allLanguages())
+		case http.MethodPost:
+			var opt LanguageOption
+			if err := json.NewDecoder(r.Body).Decode(&opt); err != nil || opt.Value == "" {
+				http.Error(w, "bad request", http.StatusBadRequest)
+				return
+			}
+			languagesMu.Lock()
+			found := false
+			for i, l := range extraLanguages {
+				if l.Value == opt.Value {
+					extraLanguages[i].Label = opt.Label
+					found = true
+					break
+				}
+			}
+			if !found {
+				extraLanguages = append(extraLanguages, opt)
+			}
+			languagesMu.Unlock()
 			w.WriteHeader(http.StatusNoContent)
 		}
 	})

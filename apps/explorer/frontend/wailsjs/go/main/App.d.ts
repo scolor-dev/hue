@@ -46,4 +46,8 @@ export function RunCommandShortcut(arg1:string,arg2:string,arg3:string):Promise<
 
 export function SaveSettings(arg1:main.HueSettings):Promise<void>;
 
+export function LoadPlugins():Promise<Array<main.PluginInfo>>;
+
+export function RegisterLanguage(arg1:string,arg2:string):Promise<void>;
+
 export function SearchFiles(arg1:string,arg2:string):Promise<Array<main.SearchEntry>>;

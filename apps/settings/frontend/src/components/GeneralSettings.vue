@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import type { HueSettings } from '../types'
 import { translations } from '../i18n'
 import type { Lang } from '../i18n'
@@ -10,6 +10,18 @@ const props = defineProps<{ settings: HueSettings; lang: string }>()
 const emit = defineEmits<{ change: [] }>()
 
 const t = computed(() => translations[props.lang as Lang] ?? translations.ja)
+
+const languages = ref([
+  { value: 'ja', label: '日本語' },
+  { value: 'en', label: 'English' },
+])
+
+onMounted(async () => {
+  try {
+    const res = await fetch('/api/languages')
+    if (res.ok) languages.value = await res.json()
+  } catch {}
+})
 
 function update<K extends keyof HueSettings>(key: K, value: HueSettings[K]) {
   props.settings[key] = value
@@ -24,10 +36,11 @@ function update<K extends keyof HueSettings>(key: K, value: HueSettings[K]) {
     <SettingRow :label="t.general.language" :description="t.general.languageDesc">
       <select
         :value="settings.language"
-        @change="update('language', ($event.target as HTMLSelectElement).value as 'ja' | 'en')"
+        @change="update('language', ($event.target as HTMLSelectElement).value)"
       >
-        <option value="ja">日本語</option>
-        <option value="en">English</option>
+        <option v-for="lang in languages" :key="lang.value" :value="lang.value">
+          {{ lang.label }}
+        </option>
       </select>
     </SettingRow>
 

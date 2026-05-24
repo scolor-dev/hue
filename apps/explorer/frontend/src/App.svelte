@@ -4,7 +4,8 @@
            DeleteItem, RenameItem, CreateFolder, CreateFile, CopyItem, MoveItem,
            GetThumbnail, GetPreview, OpenSettings, GetSettings,
            AddFavorite, RemoveFavorite,
-           GetStartupPath, OpenInNewWindow, ExecInConsole, SearchFiles } from '../wailsjs/go/main/App'
+           GetStartupPath, OpenInNewWindow, ExecInConsole, SearchFiles,
+           LoadPlugins, RegisterLanguage } from '../wailsjs/go/main/App'
   import { EventsOn, OnFileDrop } from '../wailsjs/runtime/runtime'
   import TreeSidebar from './TreeSidebar.svelte'
   import ConsolePane from './ConsolePane.svelte'
@@ -42,7 +43,7 @@
   const IMG_EXTS = new Set(['.jpg','.jpeg','.png','.gif','.webp','.bmp','.tiff','.ico'])
 
   // 翻訳
-  const tr = {
+  let tr = {
     ja: {
       sidebarLabel: 'フォルダ',
       shortcutsLabel: 'ショートカット',
@@ -208,6 +209,44 @@
     consoleLines = [...consoleLines, { id: consoleSeq++, type, text }]
   }
 
+  // プラグイン
+  let pluginMenuItems = [] // { label, icon?, match?, action }
+
+  function setupHueAPI() {
+    window.hue = {
+      contextMenu: {
+        add(item) { pluginMenuItems = [...pluginMenuItems, item] }
+      },
+      i18n: {
+        register(locale, translations, displayName) {
+          tr = { ...tr, [locale]: translations }
+          RegisterLanguage(locale, displayName ?? locale)
+        }
+      },
+      exec(command) {
+        consoleCwd = currentPath
+        consoleVisible = true
+        consoleRunning = true
+        consolePush('system', `> ${command}`)
+        ExecInConsole(currentPath, command)
+      },
+      open(path) { OpenFile(path) },
+      refresh() { refresh() },
+      get currentPath() { return currentPath },
+    }
+  }
+
+  async function loadPlugins() {
+    setupHueAPI()
+    try {
+      const plugins = await LoadPlugins()
+      for (const p of plugins) {
+        try { new Function(p.code)() }
+        catch (e) { console.error(`[plugin:${p.name}]`, e) }
+      }
+    } catch {}
+  }
+
   // ドラッグ＆ドロップ
   let dropOver = false
 
@@ -256,6 +295,7 @@
     const s = await GetSettings()
     await applySettings(s)
     drives = await GetDrives()
+    await loadPlugins()
     const startupPath = await GetStartupPath()
     const initialPath = startupPath || await GetHomeDir()
     await navigate(initialPath)
@@ -929,6 +969,15 @@
           {t.rename} <span class="shortcut">F2</span>
         </button>
       {/if}
+      {#if pluginMenuItems.filter(item => item.match?.(contextMenu.target) ?? true).length > 0}
+        <hr />
+        {#each pluginMenuItems.filter(item => item.match?.(contextMenu.target) ?? true) as item}
+          <button on:click={() => { item.action(contextMenu.target); closeContextMenu() }}>
+            {item.icon ? item.icon + ' ' : ''}{item.label}
+          </button>
+        {/each}
+      {/if}
+      <hr />
       <button class="danger" on:click={() => { doDelete(contextMenu.paths); closeContextMenu() }}>
         {t.delete}{contextMenu.paths.length > 1 ? ` (${contextMenu.paths.length})` : ''} <span class="shortcut">Del</span>
       </button>

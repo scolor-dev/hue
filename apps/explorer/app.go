@@ -2,7 +2,9 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -321,6 +323,59 @@ func goListDirectory(path string) ([]FileEntry, error) {
 	})
 
 	return files, nil
+}
+
+func (a *App) RegisterLanguage(locale, displayName string) {
+	data, _ := json.Marshal(map[string]string{"value": locale, "label": displayName})
+	http.Post("http://127.0.0.1:9271/api/languages", "application/json", bytes.NewReader(data))
+}
+
+// ── プラグイン ──
+
+type PluginInfo struct {
+	Name string `json:"name"`
+	Code string `json:"code"`
+}
+
+func (a *App) LoadPlugins() []PluginInfo {
+	dirs := pluginDirs()
+	seen := map[string]bool{}
+	var plugins []PluginInfo
+	for _, dir := range dirs {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".js") || seen[e.Name()] {
+				continue
+			}
+			code, err := os.ReadFile(filepath.Join(dir, e.Name()))
+			if err != nil {
+				continue
+			}
+			seen[e.Name()] = true
+			plugins = append(plugins, PluginInfo{
+				Name: strings.TrimSuffix(e.Name(), ".js"),
+				Code: string(code),
+			})
+		}
+	}
+	return plugins
+}
+
+func pluginDirs() []string {
+	var dirs []string
+	if exe, err := os.Executable(); err == nil {
+		dirs = append(dirs, filepath.Join(filepath.Dir(exe), "plugins"))
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		candidate := filepath.Join(cwd, "plugins")
+		if len(dirs) == 0 || dirs[0] != candidate {
+			dirs = append(dirs, candidate)
+		}
+	}
+	return dirs
 }
 
 func (a *App) SearchFiles(root, query string) []SearchEntry {

@@ -61,8 +61,12 @@ async function deletePlugin(plugin: PluginMeta) {
     <div v-else class="plugin-list">
       <div v-for="plugin in plugins" :key="plugin.name" class="plugin-row">
         <div class="plugin-info">
-          <span class="plugin-name">{{ plugin.displayName }}</span>
-          <span v-if="plugin.description" class="plugin-desc">{{ plugin.description }}</span>
+          <div class="plugin-name-row">
+            <span class="plugin-name">{{ plugin.displayName }}</span>
+            <span v-if="plugin.error" class="error-badge" :title="plugin.error">エラー</span>
+          </div>
+          <span v-if="plugin.error" class="plugin-error">{{ plugin.error }}</span>
+          <span v-else-if="plugin.description" class="plugin-desc">{{ plugin.description }}</span>
           <span class="plugin-file">{{ plugin.fileName }}</span>
         </div>
         <div class="plugin-actions">
@@ -107,9 +111,19 @@ h2 { font-size: 13px; font-weight: 600; color: #858585; margin-bottom: 12px; tex
   min-width: 0;
 }
 
+.plugin-name-row { display: flex; align-items: center; gap: 8px; }
 .plugin-name { font-size: 13px; color: #d4d4d4; font-weight: 500; }
 .plugin-desc { font-size: 12px; color: #858585; }
+.plugin-error { font-size: 12px; color: #f48771; font-family: 'Consolas', monospace; }
 .plugin-file { font-size: 11px; color: #555; font-family: 'Consolas', monospace; }
+.error-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  background: #5a1d1d;
+  color: #f48771;
+  border-radius: 3px;
+  border: 1px solid #6b2020;
+}
 
 .plugin-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 

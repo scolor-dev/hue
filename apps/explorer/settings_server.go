@@ -86,7 +86,13 @@ type PluginMeta struct {
 	Description string `json:"description"`
 	Enabled     bool   `json:"enabled"`
 	FileName    string `json:"fileName"`
+	Error       string `json:"error"`
 }
+
+var (
+	pluginErrorsMu sync.RWMutex
+	pluginErrors   = map[string]string{} // name → error message
+)
 
 func parsePluginMeta(fileName, code string) PluginMeta {
 	name := strings.TrimSuffix(fileName, ".js")
@@ -127,6 +133,9 @@ func listPluginMetas() []PluginMeta {
 			code, _ := os.ReadFile(filepath.Join(dir, e.Name()))
 			meta := parsePluginMeta(e.Name(), string(code))
 			meta.Enabled = !disabled[meta.Name]
+			pluginErrorsMu.RLock()
+			meta.Error = pluginErrors[meta.Name]
+			pluginErrorsMu.RUnlock()
 			seen[e.Name()] = true
 			result = append(result, meta)
 		}
@@ -372,6 +381,32 @@ func startSettingsServer() {
 		default:
 			http.NotFound(w, r)
 		}
+	})
+
+	mux.HandleFunc("/api/plugins/error", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		if r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		var body struct {
+			Name    string `json:"name"`
+			Message string `json:"message"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Name == "" {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		pluginErrorsMu.Lock()
+		pluginErrors[body.Name] = body.Message
+		pluginErrorsMu.Unlock()
+		w.WriteHeader(http.StatusNoContent)
 	})
 
 	mux.HandleFunc("/api/plugins", func(w http.ResponseWriter, r *http.Request) {

@@ -30,6 +30,8 @@ export function GetThumbnail(arg1:string):Promise<string>;
 
 export function ListDirectory(arg1:string):Promise<Array<main.FileEntry>>;
 
+export function LoadPlugins():Promise<Array<main.PluginInfo>>;
+
 export function MoveItem(arg1:string,arg2:string):Promise<void>;
 
 export function OpenFile(arg1:string):Promise<void>;
@@ -38,20 +40,20 @@ export function OpenInNewWindow(arg1:string):Promise<void>;
 
 export function OpenSettings():Promise<void>;
 
+export function RegisterLanguage(arg1:string,arg2:string):Promise<void>;
+
+export function RegisterShortcut(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function RemoveFavorite(arg1:string):Promise<void>;
 
 export function RenameItem(arg1:string,arg2:string):Promise<void>;
+
+export function ReportPluginError(arg1:string,arg2:string):Promise<void>;
 
 export function RunCommandShortcut(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SaveSettings(arg1:main.HueSettings):Promise<void>;
 
-export function LoadPlugins():Promise<Array<main.PluginInfo>>;
-
-export function RegisterLanguage(arg1:string,arg2:string):Promise<void>;
-
-export function RegisterShortcut(arg1:string,arg2:string,arg3:string):Promise<void>;
+export function SearchFiles(arg1:string,arg2:string):Promise<Array<main.SearchEntry>>;
 
 export function SetLastPath(arg1:string):Promise<void>;
-
-export function SearchFiles(arg1:string,arg2:string):Promise<Array<main.SearchEntry>>;

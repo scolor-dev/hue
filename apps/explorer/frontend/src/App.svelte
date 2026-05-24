@@ -5,7 +5,8 @@
            GetThumbnail, GetPreview, OpenSettings, GetSettings,
            AddFavorite, RemoveFavorite,
            GetStartupPath, OpenInNewWindow, ExecInConsole, SearchFiles,
-           LoadPlugins, RegisterLanguage, SetLastPath, RegisterShortcut } from '../wailsjs/go/main/App'
+           LoadPlugins, RegisterLanguage, SetLastPath, RegisterShortcut,
+           ReportPluginError } from '../wailsjs/go/main/App'
   import { EventsOn, OnFileDrop } from '../wailsjs/runtime/runtime'
   import TreeSidebar from './TreeSidebar.svelte'
   import ConsolePane from './ConsolePane.svelte'
@@ -257,9 +258,18 @@
     setupHueAPI()
     try {
       const plugins = await LoadPlugins()
+      const failed = []
       for (const p of plugins) {
         try { new Function(p.code)() }
-        catch (e) { console.error(`[plugin:${p.name}]`, e) }
+        catch (e) {
+          const msg = e instanceof Error ? e.message : String(e)
+          console.error(`[plugin:${p.name}]`, e)
+          ReportPluginError(p.name, msg)
+          failed.push(p.name)
+        }
+      }
+      if (failed.length > 0) {
+        error = `プラグインエラー: ${failed.join(', ')} — 設定 > プラグインで詳細を確認`
       }
     } catch {}
   }

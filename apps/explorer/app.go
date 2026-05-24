@@ -325,6 +325,11 @@ func goListDirectory(path string) ([]FileEntry, error) {
 	return files, nil
 }
 
+func (a *App) ReportPluginError(name, message string) {
+	data, _ := json.Marshal(map[string]string{"name": name, "message": message})
+	http.Post("http://127.0.0.1:9271/api/plugins/error", "application/json", bytes.NewReader(data))
+}
+
 func (a *App) RegisterShortcut(key, label, description string) {
 	data, _ := json.Marshal(map[string]string{"key": key, "label": label, "description": description})
 	http.Post("http://127.0.0.1:9271/api/shortcuts", "application/json", bytes.NewReader(data))

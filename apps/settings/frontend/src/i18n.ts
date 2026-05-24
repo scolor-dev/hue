@@ -4,7 +4,7 @@ export const translations = {
   ja: {
     settings: '設定',
     saved: '保存しました',
-    nav: { general: '一般', display: '表示', preview: 'プレビュー', shortcuts: 'ショートカット', plugins: 'プラグイン', keymap: 'キー一覧', theme: 'テーマ', about: 'バージョン情報' },
+    nav: { general: '一般', display: '表示', preview: 'プレビュー', shortcuts: 'ショートカット', plugins: 'プラグイン', keymap: 'キー一覧', theme: 'テーマ', about: 'バージョン情報', run: 'ゲーム' },
     general: {
       title: '一般',
       language: '言語', languageDesc: 'UIの表示言語',
@@ -93,7 +93,7 @@ export const translations = {
   en: {
     settings: 'Settings',
     saved: 'Saved',
-    nav: { general: 'General', display: 'Display', preview: 'Preview', shortcuts: 'Shortcuts', plugins: 'Plugins', keymap: 'Key Map', theme: 'Theme', about: 'About' },
+    nav: { general: 'General', display: 'Display', preview: 'Preview', shortcuts: 'Shortcuts', plugins: 'Plugins', keymap: 'Key Map', theme: 'Theme', about: 'About', run: 'Game' },
     general: {
       title: 'General',
       language: 'Language', languageDesc: 'UI display language',

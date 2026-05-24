@@ -13,6 +13,7 @@ import PluginsSettings from './components/PluginsSettings.vue'
 import KeymapSection from './components/KeymapSection.vue'
 import ThemeSettings from './components/ThemeSettings.vue'
 import AboutSection from './components/AboutSection.vue'
+import DinoGame from './components/DinoGame.vue'
 
 const settings = ref({ ...defaultSettings })
 const activeSection = ref<SettingsSection>('general')
@@ -39,6 +40,7 @@ const navSections: { id: SettingsSection; icon: string }[] = [
   { id: 'keymap',    icon: '⌨' },
   { id: 'theme',     icon: '🎨' },
   { id: 'about',     icon: 'ℹ' },
+  { id: 'run',       icon: '🦕' },
 ]
 </script>
 
@@ -102,6 +104,7 @@ const navSections: { id: SettingsSection; icon: string }[] = [
         @change="onChange"
       />
       <AboutSection v-else-if="activeSection === 'about'" :lang="settings.language" />
+      <DinoGame v-else-if="activeSection === 'run'" />
     </main>
   </div>
 </template>

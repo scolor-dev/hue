@@ -138,7 +138,12 @@ func (a *App) RunCommandShortcut(id string, currentPath string, extraInput strin
 
 	command := sc.Command
 	if sc.PromptEnabled && extraInput != "" {
-		if strings.Contains(command, "{input}") {
+		var inputMap map[string]string
+		if err := json.Unmarshal([]byte(extraInput), &inputMap); err == nil {
+			for placeholder, val := range inputMap {
+				command = strings.ReplaceAll(command, placeholder, val)
+			}
+		} else if strings.Contains(command, "{input}") {
 			command = strings.ReplaceAll(command, "{input}", extraInput)
 		} else {
 			command = strings.TrimSpace(command) + " " + extraInput

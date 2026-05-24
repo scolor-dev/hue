@@ -52,4 +52,4 @@ export const defaultSettings: HueSettings = {
   accentColor: '',
 }
 
-export type SettingsSection = 'general' | 'display' | 'preview' | 'shortcuts' | 'plugins' | 'keymap' | 'theme' | 'about'
+export type SettingsSection = 'general' | 'display' | 'preview' | 'shortcuts' | 'plugins' | 'keymap' | 'theme' | 'about' | 'run'

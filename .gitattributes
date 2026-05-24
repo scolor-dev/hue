@@ -11,7 +11,6 @@
 *.svelte linguist-language=Svelte
 *.zig linguist-language=Zig
 *.js linguist-language=JavaScript
-*.md.js linguist-language=JavaScript
 *.vue linguist-language=Vue
 *.go linguist-language=Go
 *.ts linguist-language=TypeScript
@@ -23,15 +22,18 @@
 # ---------------------------------------------------------
 
 # Docs
-examples/** linguist-detectable=true
-docs/** linguist-detectable=true
+docs/*.md.js linguist-language=JavaScript
+docs/*.md.js linguist-detectable=true
+docs/*.md.js linguist-documentation=false
+examples/plugins/*.js linguist-language=JavaScript
+examples/plugins/*.js linguist-detectable=true
+examples/plugins/*.js linguist-vendored=false
 
 # Frontend dist output
 apps/explorer/frontend/dist/** linguist-detectable=true
+apps/explorer/frontend/dist/** linguist-vendored=false
 apps/settings/frontend/dist/** linguist-detectable=true
-
-# ###
-**/*d.* linguist-detectable=true
+apps/settings/frontend/dist/** linguist-vendored=false
 
 # ---------------------------------------------------------
 # Exclude ONLY build artifacts

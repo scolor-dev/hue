@@ -29,12 +29,6 @@ examples/plugins/*.js linguist-language=JavaScript
 examples/plugins/*.js linguist-detectable=true
 examples/plugins/*.js linguist-vendored=false
 
-# Frontend dist output
-apps/explorer/frontend/dist/** linguist-detectable=true
-apps/explorer/frontend/dist/** linguist-vendored=false
-apps/settings/frontend/dist/** linguist-detectable=true
-apps/settings/frontend/dist/** linguist-vendored=false
-
 # ---------------------------------------------------------
 # Exclude ONLY build artifacts
 # ---------------------------------------------------------
